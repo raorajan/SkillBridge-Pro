@@ -52,8 +52,21 @@ jspm_packages/
 # Yarn Integrity file
 .yarn-integrity
 
-# dotenv environment variables file
+# Environment variables - NEVER COMMIT!
 .env
+.env.*
+!.env.example
+*.env
+*.env.local
+*.env.development
+*.env.development.local
+*.env.test
+*.env.test.local
+*.env.production
+*.env.production.local
+**/.env
+**/.env.*
+!**/.env.example
 
 # IDE
 .vscode/

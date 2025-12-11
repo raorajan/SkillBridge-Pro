@@ -1,5 +1,0 @@
-VITE_APP_API_URL=http://localhost:3000
-
-# ---------- Supabase ----------
-VITE_SUPABASE_URL=https://uhlgoaiewafibnlqeczk.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVobGdvYWlld2FmaWJubHFlY3prIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY4NTg0MDcsImV4cCI6MjA3MjQzNDQwN30.ERay7ZPZvwf7HJJEunxz4uUR3ErL2rFl4LbyH2Ij3Po

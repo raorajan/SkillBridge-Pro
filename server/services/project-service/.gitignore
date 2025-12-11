@@ -1,12 +1,21 @@
 # Dependencies
 node_modules/
 
-# Environment variables
+# Environment variables - NEVER COMMIT!
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+*.env
+*.env.local
+*.env.development
+*.env.development.local
+*.env.test
+*.env.test.local
+*.env.production
+*.env.production.local
+**/.env
+**/.env.*
+!**/.env.example
 
 # Logs - All log files and directories
 *.log

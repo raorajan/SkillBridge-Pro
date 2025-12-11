@@ -18,7 +18,7 @@ const sendError = (res, message, status = 400) =>
 // Required environment variables:
 // - EMAIL_USER: Gmail address for sending emails
 // - EMAIL_PASS: Gmail app password for sending emails
-// - FRONTEND_URL: Frontend URL for email links (default: http://localhost:5173)
+// - FRONTEND_URL or CLIENT_URL: Frontend URL for email links (default: http://localhost:5173)
 const getUserInfo = async (userId) => {
   try {
     // Get user information directly from the database using the same connection
@@ -77,7 +77,7 @@ const sendApplicationConfirmationEmail = async (
             </p>
             <div style="text-align: center; margin-top: 30px;">
               <a href="${
-                process.env.FRONTEND_URL || "http://localhost:5173"
+                process.env.FRONTEND_URL || process.env.CLIENT_URL || "http://localhost:5173"
               }/project" 
                  style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold;">
                 View My Applications
@@ -143,7 +143,7 @@ const sendNewApplicationNotificationEmail = async (
             </p>
             <div style="text-align: center; margin-top: 30px;">
               <a href="${
-                process.env.FRONTEND_URL || "http://localhost:5173"
+                process.env.FRONTEND_URL || process.env.CLIENT_URL || "http://localhost:5173"
               }/project" 
                  style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold;">
                 Review Applications
@@ -314,7 +314,7 @@ const sendInviteResponseNotificationEmail = async (
               
               <div style="text-align: center; margin-top: 30px;">
                 <a href="${
-                  process.env.FRONTEND_URL || "http://localhost:5173"
+                  process.env.FRONTEND_URL || process.env.CLIENT_URL || "http://localhost:5173"
                 }/project/${projectTitle.replace(/\s+/g, "-").toLowerCase()}" 
                    style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; display: inline-block;">
                   View Project
@@ -364,7 +364,7 @@ const sendInviteResponseNotificationEmail = async (
               
               <div style="text-align: center; margin-top: 30px;">
                 <a href="${
-                  process.env.FRONTEND_URL || "http://localhost:5173"
+                  process.env.FRONTEND_URL || process.env.CLIENT_URL || "http://localhost:5173"
                 }/project" 
                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; display: inline-block;">
                   Find More Developers
@@ -445,7 +445,7 @@ const sendApplicationStatusEmail = async (
               </p>
               <div style="text-align: center; margin-top: 30px;">
                 <a href="${
-                  process.env.FRONTEND_URL || "http://localhost:5173"
+                  process.env.FRONTEND_URL || process.env.CLIENT_URL || "http://localhost:5173"
                 }/project" 
                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold;">
                   View Project Details
@@ -484,7 +484,7 @@ const sendApplicationStatusEmail = async (
               </p>
               <div style="text-align: center; margin-top: 30px;">
                 <a href="${
-                  process.env.FRONTEND_URL || "http://localhost:5173"
+                  process.env.FRONTEND_URL || process.env.CLIENT_URL || "http://localhost:5173"
                 }/project" 
                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold;">
                   Explore More Projects
@@ -1134,7 +1134,7 @@ const sendApplicationWithdrawalEmail = async (
             </p>
             <div style="text-align: center; margin-top: 30px;">
               <a href="${
-                process.env.FRONTEND_URL || "http://localhost:5173"
+                process.env.FRONTEND_URL || process.env.CLIENT_URL || "http://localhost:5173"
               }/projects"
                  style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold;">
                 View Other Applications

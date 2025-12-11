@@ -2,7 +2,7 @@ const express = require("express");
 const passport = require("passport");
 const authRouter = express.Router();
 
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const FRONTEND_URL = process.env.FRONTEND_URL || process.env.CLIENT_URL || "http://localhost:5173";
 
 // 🌐 Google OAuth
 authRouter.get(

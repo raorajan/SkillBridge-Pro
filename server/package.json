@@ -10,7 +10,7 @@
     "start:project": "cd services/project-service && npm run dev",
     "start:chat": "cd services/chat-service && npm run dev",
     
-    "install:all": "npm install && cd api-gateway && npm install && cd ../services/user-service && npm install && cd ../services/settings-service && npm install && cd ../project-service && npm install && cd ../chat-service && npm install",
+    "install:all": "npm install && cd api-gateway && npm install && cd ../shared && npm install && cd ../services/user-service && npm install && cd ../settings-service && npm install && cd ../project-service && npm install && cd ../chat-service && npm install",
 
     "_comment_db_generate": "Generate migration files from schema changes",
     "db:generate": "concurrently \"npm run db:generate:user\" \"npm run db:generate:settings\" \"npm run db:generate:project\" \"npm run db:generate:chat\"",

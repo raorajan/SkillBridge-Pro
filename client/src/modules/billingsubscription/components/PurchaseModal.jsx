@@ -41,7 +41,26 @@ const PurchaseModal = ({ isOpen, onClose, plan, onSuccess }) => {
       setFormErrors({});
       setShowAddPaymentForm(false);
     }
-  }, [isOpen, paymentMethods, dispatch, selectedPaymentMethod]);
+  }, [isOpen, paymentMethods, dispatch]);
+  
+  // Update selected payment method when payment methods list changes
+  useEffect(() => {
+    if (paymentMethods.length > 0) {
+      // If no payment method is selected, select default or first one
+      if (!selectedPaymentMethod) {
+        const defaultMethod = paymentMethods.find(m => m.default) || paymentMethods[0];
+        setSelectedPaymentMethod(defaultMethod?.id || null);
+      } else {
+        // Verify selected payment method still exists in the list
+        const methodExists = paymentMethods.some(m => m.id === selectedPaymentMethod);
+        if (!methodExists) {
+          // If selected method no longer exists, select default or first one
+          const defaultMethod = paymentMethods.find(m => m.default) || paymentMethods[0];
+          setSelectedPaymentMethod(defaultMethod?.id || null);
+        }
+      }
+    }
+  }, [paymentMethods]);
 
   // Validation functions
   const validateCardNumber = (cardNumber) => {
@@ -167,8 +186,34 @@ const PurchaseModal = ({ isOpen, onClose, plan, onSuccess }) => {
     }
 
     try {
-      await dispatch(addPaymentMethod(paymentFormData)).unwrap();
+      const result = await dispatch(addPaymentMethod(paymentFormData)).unwrap();
+      
+      // Get the payment method ID from the response
+      // The API returns the payment method object directly in result
+      const newPaymentMethodId = result?.id;
+      
+      // Refresh payment methods list to get updated state
       await dispatch(getPaymentMethods());
+      
+      // Automatically select the newly added payment method
+      // Use a small delay to ensure Redux state is updated
+      setTimeout(() => {
+        if (newPaymentMethodId) {
+          setSelectedPaymentMethod(newPaymentMethodId);
+        } else {
+          // If no ID in result, select from the updated payment methods list
+          // The useEffect will handle this, but we can also do it here as fallback
+          const currentMethods = billingState.paymentMethods || paymentMethods;
+          if (currentMethods && currentMethods.length > 0) {
+            const defaultMethod = currentMethods.find(m => m.default);
+            const methodToSelect = defaultMethod || currentMethods[currentMethods.length - 1];
+            if (methodToSelect?.id) {
+              setSelectedPaymentMethod(methodToSelect.id);
+            }
+          }
+        }
+      }, 100);
+      
       setShowAddPaymentForm(false);
       setPaymentFormData({
         type: "Credit Card",
@@ -473,8 +518,11 @@ const PurchaseModal = ({ isOpen, onClose, plan, onSuccess }) => {
           </Button>
           <Button
             onClick={handlePurchase}
-            className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
-            disabled={isProcessing || (plan?.name.toLowerCase() !== 'free' && !selectedPaymentMethod && paymentMethods.length === 0)}
+            className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={
+              isProcessing || 
+              (plan?.name.toLowerCase() !== 'free' && !selectedPaymentMethod)
+            }
           >
             {isProcessing ? (
               <>

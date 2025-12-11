@@ -98,9 +98,32 @@ const combinedSwagger = {
   security: [{ bearerAuth: [] }],
 };
 
+// CORS Configuration
+const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
+  ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : [
+      'https://skillsbridge.raorajan.pro',
+      'https://raorajan.github.io',
+      'http://localhost:5173'
+    ];
+
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  })
+);
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -111,11 +134,10 @@ app.use(logger.dev, logger.combined);
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // Proxy configuration
-const API_USER_URL = process.env.API_USER_URL || "http://localhost:3001";
-
-const API_PROJECT_URL = process.env.API_PROJECT_URL || "http://localhost:3002";
-const API_SETTINGS_URL = process.env.API_SETTINGS_URL || "http://localhost:3003";
-const API_CHAT_URL = process.env.API_CHAT_URL || "http://localhost:3004";
+const API_USER_URL = process.env.API_USER_URL || "http://user-service:3001";
+const API_PROJECT_URL = process.env.API_PROJECT_URL || "http://project-service:3002";
+const API_SETTINGS_URL = process.env.API_SETTINGS_URL || "http://settings-service:3003";
+const API_CHAT_URL = process.env.API_CHAT_URL || "http://chat-service:3004";
 
 // Mount proxy at root `/` and forward full original path to user-service
 app.use(

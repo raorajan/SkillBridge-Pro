@@ -1569,7 +1569,7 @@ const getAdminAnalytics = async (req, res) => {
     };
     
     try {
-      const API_GATEWAY_URL = process.env.API_GATEWAY_URL || "http://localhost:3000";
+      const API_GATEWAY_URL = process.env.API_GATEWAY_URL || process.env.API_GATEWAY_BASE_URL || process.env.BACKEND_URL || "http://localhost:3000";
       const authToken = req.headers.authorization; // Forward auth token
       
       const projectStatsResponse = await axios.get(

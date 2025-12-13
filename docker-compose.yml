@@ -7,7 +7,7 @@ services:
       dockerfile: api-gateway/Dockerfile
     container_name: skillsbridge-backend
     ports:
-      - "3000:3000"
+      - "4000:3000"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3000
@@ -52,8 +52,7 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - SESSION_SECRET=${SESSION_SECRET}
-      - API_GATEWAY_BASE_URL=https://skillsbridgeapi.raorajan.pro
-      - CLIENT_URL=https://skillsbridge.raorajan.pro
+      - CLIENT_URL=${CLIENT_URL}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
@@ -202,7 +201,7 @@ services:
     build: ./client
     container_name: skillsbridge-frontend
     ports:
-      - "5173:5173"
+      - "5180:5173"
     depends_on:
       - backend
     environment:

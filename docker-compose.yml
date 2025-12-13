@@ -1,221 +1,333 @@
 version: '3.8'
 
-services:
-  backend:
-    build:
-      context: ./server
-      dockerfile: api-gateway/Dockerfile
-    container_name: skillsbridge-backend
-    ports:
-      - "4000:3000"
-    environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - PORT=3000
-      - MONGODB_URL=${MONGODB_URL}
-      - BACKEND_URL=https://skillsbridgeapi.raorajan.pro
-      - FRONTEND_URL=https://skillsbridge.raorajan.pro
-      - CLIENT_URL=https://skillsbridge.raorajan.pro
-      - API_USER_URL=${API_USER_URL:-http://user-service:3001}
-      - API_PROJECT_URL=${API_PROJECT_URL:-http://project-service:3002}
-      - API_SETTINGS_URL=${API_SETTINGS_URL:-http://settings-service:3003}
-      - API_CHAT_URL=${API_CHAT_URL:-http://chat-service:3004}
-      - JWT_SECRET=${JWT_SECRET}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - API_GATEWAY_URL=${API_GATEWAY_URL}
-      - API_GATEWAY_BASE_URL=${API_GATEWAY_BASE_URL}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-    depends_on:
-      - user-service
-      - project-service
-      - settings-service
-      - chat-service
-    restart: unless-stopped
-    networks:
-      - skillbridge-network
+# Define custom networks for better isolation
+networks:
+  skillbridge-external:
+    driver: bridge
+  skillbridge-internal:
+    driver: bridge
 
+# Shared volumes
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# Services
+services:
+  # ========== DATABASE SERVICES ==========
+  postgres:
+    image: postgres:15-alpine
+    container_name: skillsbridge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-skillbridge_db}
+      POSTGRES_USER: ${DB_USER:-skillbridge_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - skillbridge-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-skillbridge_user} -d ${DB_NAME:-skillbridge_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: skillsbridge-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - skillbridge-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ========== MICROSERVICES ==========
   user-service:
     build:
       context: ./server
       dockerfile: services/user-service/Dockerfile
     container_name: skillsbridge-user-service
-    ports:
-      - "3001:3001"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
-      - NODE_ENV=${NODE_ENV:-production}
+      - NODE_ENV=production
       - PORT=3001
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT:-5432}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
-      - DB_SSL=${DB_SSL:-true}
+      # Database - use local postgres container
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-skillbridge_user}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - DB_NAME=${DB_NAME:-skillbridge_db}
+      - DB_SSL=false
+      # Auth
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - SESSION_SECRET=${SESSION_SECRET}
-      - CLIENT_URL=${CLIENT_URL}
+      # URLs
+      - API_GATEWAY_URL=http://backend:3000
+      - API_GATEWAY_BASE_URL=http://backend:3000
+      - CLIENT_URL=${CLIENT_URL:-http://localhost:5180}
+      # OAuth
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
       - LINKEDIN_CLIENT_ID=${LINKEDIN_CLIENT_ID}
       - LINKEDIN_CLIENT_SECRET=${LINKEDIN_CLIENT_SECRET}
+      # Services
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - SUPABASE_SERVICE_PRIVATE_ROLE_KEY=${SUPABASE_SERVICE_PRIVATE_ROLE_KEY}
-      - SUPABASE_SERVICE_PUBLIC_ROLE_KEY=${SUPABASE_SERVICE_PUBLIC_ROLE_KEY}
       - EMAIL_USER=${EMAIL_USER}
       - EMAIL_PASS=${EMAIL_PASS}
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT}
-      - SMTP_SERVICE=${SMTP_SERVICE}
-      - SMTP_MAIL=${SMTP_MAIL}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
       - CLOUDINARY_NAME=${CLOUDINARY_NAME}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
       - CLOUDINARY_SECRET_KEY=${CLOUDINARY_SECRET_KEY}
-      - API_GATEWAY_URL=${API_GATEWAY_URL}
-      - API_GATEWAY_BASE_URL=${API_GATEWAY_BASE_URL}
+      # Callbacks
       - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
       - GITHUB_CALLBACK_URL=${GITHUB_CALLBACK_URL}
       - LINKEDIN_CALLBACK_URL=${LINKEDIN_CALLBACK_URL}
-      - VERIFY_EMAIL_URL=${VERIFY_EMAIL_URL}
-      - RESET_PASSWORD_URL=${RESET_PASSWORD_URL}
-      - PORTFOLIO_SYNC_REDIRECT_URL=${PORTFOLIO_SYNC_REDIRECT_URL}
-      - GITHUB_API_BASE_URL=${GITHUB_API_BASE_URL}
-      - GITHUB_WEB_BASE_URL=${GITHUB_WEB_BASE_URL}
-      - STACKOVERFLOW_API_BASE_URL=${STACKOVERFLOW_API_BASE_URL}
-      - STACKOVERFLOW_SITE=${STACKOVERFLOW_SITE}
-    restart: unless-stopped
     networks:
-      - skillbridge-network
+      - skillbridge-internal
+      - skillbridge-external
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: >
+      sh -c "
+        echo 'Running database migrations...' &&
+        npx drizzle-kit push 2>/dev/null || echo 'Migrations already applied' &&
+        echo 'Starting user service...' &&
+        node src/server.js
+      "
 
   project-service:
     build:
       context: ./server
       dockerfile: services/project-service/Dockerfile
     container_name: skillsbridge-project-service
-    ports:
-      - "3002:3002"
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - user-service
     environment:
-      - NODE_ENV=${NODE_ENV:-production}
+      - NODE_ENV=production
       - PORT=3002
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT:-5432}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
-      - DB_SSL=${DB_SSL:-true}
+      # Database
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-skillbridge_user}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - DB_NAME=${DB_NAME:-skillbridge_db}
+      - DB_SSL=false
+      # Auth
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
-      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
-      - LINKEDIN_CLIENT_ID=${LINKEDIN_CLIENT_ID}
-      - LINKEDIN_CLIENT_SECRET=${LINKEDIN_CLIENT_SECRET}
+      # Services
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - SUPABASE_SERVICE_PRIVATE_ROLE_KEY=${SUPABASE_SERVICE_PRIVATE_ROLE_KEY}
-      - SUPABASE_SERVICE_PUBLIC_ROLE_KEY=${SUPABASE_SERVICE_PUBLIC_ROLE_KEY}
-      - EMAIL_USER=${EMAIL_USER}
-      - EMAIL_PASS=${EMAIL_PASS}
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT}
-      - SMTP_SERVICE=${SMTP_SERVICE}
-      - SMTP_MAIL=${SMTP_MAIL}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
       - CLOUDINARY_NAME=${CLOUDINARY_NAME}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
       - CLOUDINARY_SECRET_KEY=${CLOUDINARY_SECRET_KEY}
-      - API_GATEWAY_URL=${API_GATEWAY_URL}
-      - API_GATEWAY_BASE_URL=${API_GATEWAY_BASE_URL}
-    restart: unless-stopped
+      # URLs
+      - API_GATEWAY_URL=http://backend:3000
+      - API_GATEWAY_BASE_URL=http://backend:3000
     networks:
-      - skillbridge-network
+      - skillbridge-internal
+      - skillbridge-external
+    ports:
+      - "3002:3002"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: >
+      sh -c "
+        npx drizzle-kit push 2>/dev/null || echo 'Migrations already applied' &&
+        node src/server.js
+      "
 
   settings-service:
     build:
       context: ./server
       dockerfile: services/settings-service/Dockerfile
     container_name: skillsbridge-settings-service
-    ports:
-      - "3003:3003"
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - user-service
     environment:
-      - NODE_ENV=${NODE_ENV:-production}
+      - NODE_ENV=production
       - PORT=3003
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT:-5432}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
-      - DB_SSL=${DB_SSL:-true}
+      # Database
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-skillbridge_user}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - DB_NAME=${DB_NAME:-skillbridge_db}
+      - DB_SSL=false
+      # Auth
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - SESSION_SECRET=${SESSION_SECRET}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
-      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
-      - LINKEDIN_CLIENT_ID=${LINKEDIN_CLIENT_ID}
-      - LINKEDIN_CLIENT_SECRET=${LINKEDIN_CLIENT_SECRET}
+      # Services
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - SUPABASE_SERVICE_PRIVATE_ROLE_KEY=${SUPABASE_SERVICE_PRIVATE_ROLE_KEY}
-      - SUPABASE_SERVICE_PUBLIC_ROLE_KEY=${SUPABASE_SERVICE_PUBLIC_ROLE_KEY}
       - CLOUDINARY_NAME=${CLOUDINARY_NAME}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
       - CLOUDINARY_SECRET_KEY=${CLOUDINARY_SECRET_KEY}
-    restart: unless-stopped
     networks:
-      - skillbridge-network
+      - skillbridge-internal
+      - skillbridge-external
+    ports:
+      - "3003:3003"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3003/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: >
+      sh -c "
+        npx drizzle-kit push 2>/dev/null || echo 'Migrations already applied' &&
+        node src/server.js
+      "
 
   chat-service:
     build:
       context: ./server
       dockerfile: services/chat-service/Dockerfile
     container_name: skillsbridge-chat-service
-    ports:
-      - "3004:3004"
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - user-service
+      - redis
     environment:
-      - NODE_ENV=${NODE_ENV:-production}
+      - NODE_ENV=production
       - PORT=3004
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT:-5432}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
-      - DB_SSL=${DB_SSL:-true}
+      # Database
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-skillbridge_user}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - DB_NAME=${DB_NAME:-skillbridge_db}
+      - DB_SSL=false
+      # Auth
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - SESSION_SECRET=${SESSION_SECRET}
-      - CLIENT_URL=https://skillsbridge.raorajan.pro
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redispass}
+      # URLs
+      - CLIENT_URL=${CLIENT_URL:-http://localhost:5180}
+      # Services
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - SUPABASE_SERVICE_PRIVATE_ROLE_KEY=${SUPABASE_SERVICE_PRIVATE_ROLE_KEY}
-      - SUPABASE_SERVICE_PUBLIC_ROLE_KEY=${SUPABASE_SERVICE_PUBLIC_ROLE_KEY}
-    restart: unless-stopped
     networks:
-      - skillbridge-network
-
-  frontend:
-    build: ./client
-    container_name: skillsbridge-frontend
+      - skillbridge-internal
+      - skillbridge-external
     ports:
-      - "5180:5173"
+      - "3004:3004"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3004/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: >
+      sh -c "
+        npx drizzle-kit push 2>/dev/null || echo 'Migrations already applied' &&
+        node src/server.js
+      "
+
+  # ========== API GATEWAY ==========
+  backend:
+    build:
+      context: ./server
+      dockerfile: api-gateway/Dockerfile
+    container_name: skillsbridge-backend
+    restart: unless-stopped
+    depends_on:
+      user-service:
+        condition: service_healthy
+      project-service:
+        condition: service_started
+      settings-service:
+        condition: service_started
+      chat-service:
+        condition: service_started
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Internal service URLs (Docker network)
+      - API_USER_URL=http://user-service:3001
+      - API_PROJECT_URL=http://project-service:3002
+      - API_SETTINGS_URL=http://settings-service:3003
+      - API_CHAT_URL=http://chat-service:3004
+      # Auth
+      - JWT_SECRET=${JWT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET}
+      # External URLs
+      - BACKEND_URL=${BACKEND_URL:-http://localhost:4000}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5180}
+      - CLIENT_URL=${CLIENT_URL:-http://localhost:5180}
+      - API_GATEWAY_URL=${API_GATEWAY_URL:-http://localhost:4000}
+      - API_GATEWAY_BASE_URL=${API_GATEWAY_BASE_URL:-http://localhost:4000}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:5180}
+    networks:
+      - skillbridge-internal
+      - skillbridge-external
+    ports:
+      - "4000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: ["node", "src/index.js"]
+
+  # ========== FRONTEND ==========
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: skillsbridge-frontend
+    restart: unless-stopped
     depends_on:
       - backend
     environment:
-      - VITE_API_URL=https://skillsbridgeapi.raorajan.pro/
-      - VITE_APP_API_URL=https://skillsbridgeapi.raorajan.pro/
-      - VITE_FRONTEND_URL=https://skillsbridge.raorajan.pro/
-      - VITE_CHAT_SERVICE_URL=https://skillsbridgeapi.raorajan.pro
+      - VITE_API_URL=${BACKEND_URL:-http://localhost:4000}/
+      - VITE_APP_API_URL=${BACKEND_URL:-http://localhost:4000}/
+      - VITE_FRONTEND_URL=${FRONTEND_URL:-http://localhost:5180}/
+      - VITE_CHAT_SERVICE_URL=${API_GATEWAY_URL:-http://localhost:4000}
       - VITE_SUPABASE_URL=${SUPABASE_URL}
       - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-    restart: unless-stopped
     networks:
-      - skillbridge-network
-
-networks:
-  skillbridge-network:
-    driver: bridge
-
+      - skillbridge-external
+    ports:
+      - "5180:5173"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5173 || exit 0"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

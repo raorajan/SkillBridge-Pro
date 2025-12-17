@@ -1,5 +1,5 @@
 # Stage 1: Builder for shared dependencies
-FROM node:18-alpine AS shared-builder
+FROM node:22-alpine AS shared-builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY shared/package*.json ./
 RUN npm ci --only=production --no-audit --no-fund
 
 # Create a clean image with only shared dependencies
-FROM node:18-alpine AS shared-deps
+FROM node:22-alpine AS shared-deps
 
 WORKDIR /app
 

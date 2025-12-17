@@ -7,10 +7,13 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy shared dependencies first
+# Copy shared node_modules from shared image
 COPY --from=shared-deps /app/node_modules ./node_modules
 
-# Copy api-gateway package files
+# Copy shared source code (needed for file: dependency resolution)
+COPY shared/ ./shared/
+
+# Copy api-gateway package files (including package-lock.json)
 COPY api-gateway/package*.json ./
 
 # Install api-gateway dependencies
@@ -19,10 +22,6 @@ RUN npm ci --only=production --no-audit --no-fund
 # Copy api-gateway source code
 COPY api-gateway/ ./
 
-# Copy shared source code
-COPY shared/ ./shared/
-
-# Stage 3: Runtime
 FROM node:18-alpine
 
 WORKDIR /app

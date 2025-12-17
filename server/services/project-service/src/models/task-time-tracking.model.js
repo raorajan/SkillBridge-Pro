@@ -149,10 +149,11 @@ class TaskTimeTrackingModel {
       WHERE user_id = ${userId}
     `;
     
-    if (startDate) {
+    // Validate dates before using them
+    if (startDate && startDate instanceof Date && !isNaN(startDate.getTime())) {
       query = sql`${query} AND start_time >= ${startDate}`;
     }
-    if (endDate) {
+    if (endDate && endDate instanceof Date && !isNaN(endDate.getTime())) {
       query = sql`${query} AND start_time <= ${endDate}`;
     }
     

@@ -5,14 +5,20 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
+# Copy shared node_modules from shared image
 COPY --from=shared-deps /app/node_modules ./node_modules
 
+# Copy shared source code (needed for file: dependency resolution)
+COPY shared/ ./shared/
+
+# Copy service package files (including package-lock.json)
 COPY services/settings-service/package*.json ./
 
+# Install service dependencies
 RUN npm ci --only=production --no-audit --no-fund
 
+# Copy service source code
 COPY services/settings-service/ ./
-COPY shared/ ./shared/
 
 FROM node:18-alpine
 
@@ -21,6 +27,7 @@ WORKDIR /app
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodeuser -u 1001
 
+# Copy built dependencies and source
 COPY --from=builder --chown=nodeuser:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodeuser:nodejs /app ./
 

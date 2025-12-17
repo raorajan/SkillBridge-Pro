@@ -21,8 +21,8 @@ const { projectTagsTable, tagsTable } = require("./project-tags.model");
 // Import related tables for statistics
 const { projectApplicantsTable } = require("./project-applicants.model");
 const { projectReviewsTable } = require("./project-reviews.model");
-const { projectUpdatesTable } = require("./project-updates.model");
-const { projectBoostsTable } = require("./project-boosts.model");
+const { projectUpdatesTable, ProjectUpdatesModel } = require("./project-updates.model");
+const { projectBoostsTable, ProjectBoostsModel } = require("./project-boosts.model");
 const { projectFilesTable } = require("./project-files.model");
 const { projectCommentsTable } = require("./project-comments.model");
 const { projectAnalyticsTable } = require("./project-analytics.model");
@@ -943,6 +943,15 @@ class ProjectsModel {
       projectsByMonth,
       monthlyGrowth: parseFloat(monthlyGrowth),
     };
+  }
+
+  // Wrapper methods for project updates and boosts
+  static async getProjectUpdates(projectId) {
+    return await ProjectUpdatesModel.getUpdatesByProjectId(projectId);
+  }
+
+  static async getProjectBoosts(projectId) {
+    return await ProjectBoostsModel.getBoostsByProjectId(projectId);
   }
 }
 

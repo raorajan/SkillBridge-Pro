@@ -6,7 +6,8 @@ const helmet = require("helmet");
 const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
 const proxy = require("express-http-proxy");
-const logger = require("./utils/logger.utils");
+const loggerUtils = require("./utils/logger.utils");
+const logger = loggerUtils.logger;
 const errorMiddleware = require("./middlewares/error.middleware");
 const rabbitMQClient = require("./config/rabbitmq");
 
@@ -107,37 +108,53 @@ const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
       'http://localhost:5173'
     ];
 
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  optionsSuccessStatus: 200,
+  preflightContinue: false,
+};
+
 // Middleware
 app.use(helmet());
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  })
-);
+app.use(cors(corsOptions));
+// Express 5: use regex for preflight instead of "*" to avoid path-to-regexp crash
+app.options(/.*/, cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Logging middleware
-app.use(logger.dev, logger.combined);
+app.use(loggerUtils.dev, loggerUtils.combined);
 
 // Static files
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // Proxy configuration
-const API_USER_URL = process.env.API_USER_URL || "http://user-service:3001";
-const API_PROJECT_URL = process.env.API_PROJECT_URL || "http://project-service:3002";
-const API_SETTINGS_URL = process.env.API_SETTINGS_URL || "http://settings-service:3003";
-const API_CHAT_URL = process.env.API_CHAT_URL || "http://chat-service:3004";
+// Use localhost for local development, Docker service names for production
+const isDocker = process.env.DOCKER_ENV === 'true' || process.env.NODE_ENV === 'production';
+const API_USER_URL = process.env.API_USER_URL || (isDocker ? "http://user-service:3001" : "http://localhost:3001");
+const API_PROJECT_URL = process.env.API_PROJECT_URL || (isDocker ? "http://project-service:3002" : "http://localhost:3002");
+const API_SETTINGS_URL = process.env.API_SETTINGS_URL || (isDocker ? "http://settings-service:3003" : "http://localhost:3003");
+const API_CHAT_URL = process.env.API_CHAT_URL || (isDocker ? "http://chat-service:3004" : "http://localhost:3004");
+
+// Log proxy configuration
+logger.info('Proxy Configuration:', {
+  API_USER_URL,
+  API_PROJECT_URL,
+  API_SETTINGS_URL,
+  API_CHAT_URL,
+  isDocker,
+  NODE_ENV: process.env.NODE_ENV
+});
 
 // Mount proxy at root `/` and forward full original path to user-service
 app.use(
@@ -154,7 +171,14 @@ app.use(
     },
     userResDecorator: async (proxyRes, proxyResData) => proxyResData.toString("utf8"),
     onError: (err, req, res) => {
-      res.status(500).json({ message: "Proxy error", error: err.message });
+      logger.error(`Proxy error for ${req.method} ${req.originalUrl}:`, err);
+      res.status(500).json({ 
+        type: 'error',
+        status: 500,
+        message: "Internal server error",
+        error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+        data: null
+      });
     },
   })
 );

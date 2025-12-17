@@ -3,7 +3,7 @@ FROM node:18-alpine AS shared-builder
 
 WORKDIR /app
 
-# Copy shared package files
+# Copy shared package files (including package-lock.json)
 COPY shared/package*.json ./
 
 # Install shared dependencies
@@ -27,4 +27,3 @@ RUN chown -R nodeuser:nodejs /app
 USER nodeuser
 
 # This image only contains shared dependencies
-

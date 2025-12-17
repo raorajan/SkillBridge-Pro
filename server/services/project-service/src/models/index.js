@@ -78,12 +78,15 @@ const ProjectModel = {
   
   // Updates
   addUpdate: ProjectUpdatesModel.addUpdate,
+  getProjectUpdates: ProjectUpdatesModel.getUpdatesByProjectId,
   
   // Reviews
   addReview: ProjectReviewsModel.addReview,
+  getProjectReviews: ProjectReviewsModel.getReviewsByProjectId,
   
   // Boosts
   addBoost: ProjectBoostsModel.addBoost,
+  getProjectBoosts: ProjectBoostsModel.getBoostsByProjectId,
   
   // New functionality
   addCollaborator: ProjectCollaboratorsModel.addCollaborator,

@@ -3721,7 +3721,12 @@ const getProjectOwnerReviews = async (req, res) => {
     const allReviews = [];
     for (const project of ownedProjects) {
       try {
-        const reviews = await ProjectModel.getProjectReviews(project.id);
+        // Validate project.id before using it
+        if (!project || !project.id || isNaN(Number(project.id))) {
+          console.log(`Skipping project with invalid ID:`, project);
+          continue;
+        }
+        const reviews = await ProjectModel.getProjectReviews(Number(project.id));
         allReviews.push(
           ...reviews.map((review) => ({
           ...review,
@@ -3729,7 +3734,7 @@ const getProjectOwnerReviews = async (req, res) => {
           }))
         );
       } catch (e) {
-        console.log(`Error fetching reviews for project ${project.id}:`, e);
+        console.log(`Error fetching reviews for project ${project?.id}:`, e);
       }
     }
 

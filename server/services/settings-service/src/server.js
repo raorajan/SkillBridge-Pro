@@ -47,8 +47,11 @@ const corsOptions = {
   preflightContinue: false,
 };
 
-// 🔐 Core Middlewares
-app.use(helmet());
+// 🔐 Core Middlewares - Configure helmet to work with CORS
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false
+}));
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 app.use(express.json());

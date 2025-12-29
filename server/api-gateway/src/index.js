@@ -105,6 +105,7 @@ const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
   : [
       'https://skillsbridge.raorajan.pro',
       'https://raorajan.github.io',
+      'http://localhost:5180',
       'http://localhost:5173'
     ];
 
@@ -134,11 +135,12 @@ const corsOptions = {
   preflightContinue: false,
 };
 
-// Middleware
-app.use(helmet());
+// Middleware - Configure helmet to work with CORS
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false
+}));
 app.use(cors(corsOptions));
-// Express 5: use regex for preflight instead of "*" to avoid path-to-regexp crash
-app.options(/.*/, cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -166,6 +168,49 @@ logger.info('Proxy Configuration:', {
   NODE_ENV: process.env.NODE_ENV
 });
 
+// Helper function to remove CORS headers from backend service responses and ensure gateway CORS headers are set
+// The gateway handles CORS, so we don't want backend services to send their own CORS headers
+const processCorsHeaders = (headers, userReq) => {
+  const corsHeaders = [
+    'access-control-allow-origin',
+    'access-control-allow-methods',
+    'access-control-allow-headers',
+    'access-control-allow-credentials',
+    'access-control-expose-headers',
+    'access-control-max-age'
+  ];
+  
+  // Remove backend CORS headers case-insensitively
+  Object.keys(headers).forEach(key => {
+    const lowerKey = key.toLowerCase();
+    if (corsHeaders.includes(lowerKey)) {
+      delete headers[key];
+    }
+  });
+  
+  // Ensure gateway CORS headers are set (since proxy might overwrite them)
+  const origin = userReq.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    // Origin is allowed - set CORS headers
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Access-Control-Allow-Credentials'] = 'true';
+    headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,PATCH,OPTIONS';
+    headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Accept,Accept-Language,Accept-Encoding';
+    headers['Access-Control-Expose-Headers'] = 'Content-Type,Authorization';
+    // Set Vary header for proper caching
+    const existingVary = headers['Vary'] || '';
+    headers['Vary'] = existingVary ? `${existingVary}, Origin` : 'Origin';
+  } else if (!origin) {
+    // No origin header (e.g., same-origin request, mobile app, curl, Postman)
+    // These are typically same-origin requests, so CORS headers aren't needed
+    // But we set them anyway for consistency and to avoid issues
+    // Note: We can't use '*' with credentials: true, so we skip for no-origin requests
+  }
+  // If origin exists but is not allowed, don't set CORS headers (browser will block)
+  
+  return headers;
+};
+
 // Mount proxy at root `/` and forward full original path to user-service
 app.use(
   "/api/v1/user",
@@ -178,6 +223,9 @@ app.use(
       // Forward all headers including Authorization
       proxyReqOpts.headers = { ...proxyReqOpts.headers, ...srcReq.headers };
       return proxyReqOpts;
+    },
+    userResHeaderDecorator: (headers, userReq, userRes, proxyReq, proxyRes) => {
+      return processCorsHeaders(headers, userReq);
     },
     userResDecorator: async (proxyRes, proxyResData) => proxyResData.toString("utf8"),
     onError: (err, req, res) => {
@@ -205,6 +253,9 @@ app.use(
       proxyReqOpts.headers = { ...proxyReqOpts.headers, ...srcReq.headers };
       return proxyReqOpts;
     },
+    userResHeaderDecorator: (headers, userReq, userRes, proxyReq, proxyRes) => {
+      return processCorsHeaders(headers, userReq);
+    },
     userResDecorator: async (proxyRes, proxyResData) =>
       proxyResData.toString("utf8"),
     onError: (err, req, res) => {
@@ -224,6 +275,9 @@ app.use(
       // Forward all headers including Authorization
       proxyReqOpts.headers = { ...proxyReqOpts.headers, ...srcReq.headers };
       return proxyReqOpts;
+    },
+    userResHeaderDecorator: (headers, userReq, userRes, proxyReq, proxyRes) => {
+      return processCorsHeaders(headers, userReq);
     },
     userResDecorator: async (proxyRes, proxyResData) =>
       proxyResData.toString("utf8"),
@@ -246,6 +300,9 @@ app.use(
       proxyReqOpts.headers = { ...proxyReqOpts.headers, ...srcReq.headers };
       return proxyReqOpts;
     },
+    userResHeaderDecorator: (headers, userReq, userRes, proxyReq, proxyRes) => {
+      return processCorsHeaders(headers, userReq);
+    },
     userResDecorator: async (proxyRes, proxyResData) =>
       proxyResData.toString("utf8"),
     onError: (err, req, res) => {
@@ -265,6 +322,9 @@ app.use(
       // Forward all headers including Authorization
       proxyReqOpts.headers = { ...proxyReqOpts.headers, ...srcReq.headers };
       return proxyReqOpts;
+    },
+    userResHeaderDecorator: (headers, userReq, userRes, proxyReq, proxyRes) => {
+      return processCorsHeaders(headers, userReq);
     },
     userResDecorator: async (proxyRes, proxyResData) =>
       proxyResData.toString("utf8"),
@@ -286,6 +346,9 @@ app.use(
       proxyReqOpts.headers = { ...proxyReqOpts.headers, ...srcReq.headers };
       return proxyReqOpts;
     },
+    userResHeaderDecorator: (headers, userReq, userRes, proxyReq, proxyRes) => {
+      return processCorsHeaders(headers, userReq);
+    },
     userResDecorator: async (proxyRes, proxyResData) =>
       proxyResData.toString("utf8"),
     onError: (err, req, res) => {
@@ -306,6 +369,9 @@ app.use(
       proxyReqOpts.headers = { ...proxyReqOpts.headers, ...srcReq.headers };
       return proxyReqOpts;
     },
+    userResHeaderDecorator: (headers, userReq, userRes, proxyReq, proxyRes) => {
+      return processCorsHeaders(headers, userReq);
+    },
     userResDecorator: async (proxyRes, proxyResData) =>
       proxyResData.toString("utf8"),
     onError: (err, req, res) => {
@@ -325,6 +391,9 @@ app.use(
       // Forward all headers including Authorization
       proxyReqOpts.headers = { ...proxyReqOpts.headers, ...srcReq.headers };
       return proxyReqOpts;
+    },
+    userResHeaderDecorator: (headers, userReq, userRes, proxyReq, proxyRes) => {
+      return processCorsHeaders(headers, userReq);
     },
     userResDecorator: async (proxyRes, proxyResData) =>
       proxyResData.toString("utf8"),

@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 
-const CHAT_SERVICE_URL = import.meta.env.VITE_CHAT_SERVICE_URL || "http://localhost:3004";
+const CHAT_SERVICE_URL = import.meta.env.VITE_API_URL || "http://localhost:3004";
 
 // Get token from localStorage
 const getToken = () => {

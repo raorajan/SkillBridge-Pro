@@ -22,18 +22,40 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // CORS Configuration
+// Note: Since requests come through API Gateway, we need to allow gateway origin
+// The gateway handles CORS for external clients, but internal gateway requests need to be allowed
 const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
   ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
   : [
       'https://skillsbridge.raorajan.pro',
       'https://raorajan.github.io',
-      'http://localhost:5173'
+      'http://localhost:5173',
+      'http://localhost:5180'
     ];
+
+// Add API Gateway origin to allowed origins (for internal requests)
+const API_GATEWAY_URL = process.env.API_GATEWAY_URL || process.env.API_GATEWAY_BASE_URL || 'http://localhost:3000';
+const gatewayOrigin = API_GATEWAY_URL.replace(/\/$/, ''); // Remove trailing slash
+if (!allowedOrigins.includes(gatewayOrigin)) {
+  allowedOrigins.push(gatewayOrigin);
+}
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (like mobile apps, curl requests, or internal service-to-service calls)
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    
+    // Allow API Gateway origin (for internal requests)
+    if (origin === gatewayOrigin || origin === `${gatewayOrigin}/`) {
+      callback(null, true);
+      return;
+    }
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));

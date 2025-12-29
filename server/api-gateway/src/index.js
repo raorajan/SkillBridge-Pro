@@ -109,14 +109,33 @@ const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
       'http://localhost:5173'
     ];
 
+// Log allowed origins on startup
+logger.info('CORS Allowed Origins:', allowedOrigins);
+
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (like mobile apps, curl requests, Postman, or same-origin requests)
+    if (!origin) {
       callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+      return;
     }
+    
+    // Allow same-origin requests (when API gateway makes requests to itself, e.g., Swagger UI)
+    const gatewayUrl = `http://localhost:${port}`;
+    if (origin === gatewayUrl || origin === `http://localhost:${port}/` || origin === `http://127.0.0.1:${port}`) {
+      callback(null, true);
+      return;
+    }
+    
+    // Check if origin is in allowed list (exact match)
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    
+    // Origin not allowed
+    logger.warn(`CORS blocked origin: ${origin}. Allowed origins: ${allowedOrigins.join(', ')}`);
+    callback(new Error(`Not allowed by CORS: ${origin}`));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -140,7 +159,11 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
   crossOriginEmbedderPolicy: false
 }));
+
+// CORS middleware - must be before proxy routes
+// This automatically handles both preflight OPTIONS requests and actual requests
 app.use(cors(corsOptions));
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -190,23 +213,27 @@ const processCorsHeaders = (headers, userReq) => {
   
   // Ensure gateway CORS headers are set (since proxy might overwrite them)
   const origin = userReq.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
-    // Origin is allowed - set CORS headers
-    headers['Access-Control-Allow-Origin'] = origin;
-    headers['Access-Control-Allow-Credentials'] = 'true';
-    headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,PATCH,OPTIONS';
-    headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Accept,Accept-Language,Accept-Encoding';
-    headers['Access-Control-Expose-Headers'] = 'Content-Type,Authorization';
-    // Set Vary header for proper caching
-    const existingVary = headers['Vary'] || '';
-    headers['Vary'] = existingVary ? `${existingVary}, Origin` : 'Origin';
-  } else if (!origin) {
-    // No origin header (e.g., same-origin request, mobile app, curl, Postman)
-    // These are typically same-origin requests, so CORS headers aren't needed
-    // But we set them anyway for consistency and to avoid issues
-    // Note: We can't use '*' with credentials: true, so we skip for no-origin requests
+  if (origin) {
+    // Allow same-origin requests from API gateway (for Swagger UI)
+    const gatewayUrl = `http://localhost:${port}`;
+    const isGatewayOrigin = origin === gatewayUrl || origin === `${gatewayUrl}/` || origin === `http://127.0.0.1:${port}`;
+    
+    if (isGatewayOrigin || allowedOrigins.includes(origin)) {
+      // Origin is allowed - set CORS headers
+      headers['Access-Control-Allow-Origin'] = origin;
+      headers['Access-Control-Allow-Credentials'] = 'true';
+      headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,PATCH,OPTIONS';
+      headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Accept,Accept-Language,Accept-Encoding';
+      headers['Access-Control-Expose-Headers'] = 'Content-Type,Authorization';
+      // Set Vary header for proper caching
+      const existingVary = headers['Vary'] || '';
+      headers['Vary'] = existingVary ? `${existingVary}, Origin` : 'Origin';
+    } else {
+      // Origin not allowed - log for debugging
+      logger.warn(`CORS: Origin ${origin} not in allowed list. Request: ${userReq.method} ${userReq.originalUrl}`);
+    }
   }
-  // If origin exists but is not allowed, don't set CORS headers (browser will block)
+  // If no origin header, it's likely a same-origin request, so CORS headers not needed
   
   return headers;
 };

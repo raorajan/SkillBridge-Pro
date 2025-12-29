@@ -40,7 +40,7 @@ const fetchApiWrapper = (
   Authorization,
 ) => {
   // Ensure proper URL construction
-  let baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:3000";
+  let baseUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
   // Remove trailing slash from baseUrl
   baseUrl = baseUrl.replace(/\/+$/, "");
   // Ensure uri starts with a slash

@@ -110,6 +110,7 @@ const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
       "https://raorajan.github.io",
       "http://localhost:5180",
       "http://localhost:5173",
+      "http://localhost:3000"
     ];
 
 // In local / non-production environments, be permissive to avoid CORS pain.
@@ -138,11 +139,13 @@ const corsOptions = {
     "X-Requested-With",
     "Cache-Control",
     "Pragma",
+    "Expires",
+    "If-Modified-Since",
     "Accept",
     "Accept-Language",
     "Accept-Encoding"
   ],
-  exposedHeaders: ["Content-Type", "Authorization"],
+  exposedHeaders: ["Content-Type", "Authorization", "Expires", "Pragma", "Cache-Control"],
   optionsSuccessStatus: 200,
   preflightContinue: false,
 };
@@ -170,7 +173,7 @@ app.options(/.*/, (req, res) => {
       res.setHeader('Access-Control-Allow-Origin', '*');
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Accept,Accept-Language,Accept-Encoding');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Expires,If-Modified-Since,Accept,Accept-Language,Accept-Encoding');
     res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
   }
   
@@ -179,30 +182,6 @@ app.options(/.*/, (req, res) => {
 
 // Apply CORS middleware
 app.use(cors(corsOptions));
-
-// Additional middleware to ensure CORS headers are ALWAYS set on responses
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  // Set CORS headers on every response
-  if (origin) {
-    // In development, allow any origin
-    if (isDev || allowedOrigins.includes(origin)) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-    }
-  } else if (isDev) {
-    // In dev, allow requests without origin
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
-  
-  // Always set these headers
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Accept,Accept-Language,Accept-Encoding');
-  res.setHeader('Access-Control-Expose-Headers', 'Content-Type,Authorization');
-  
-  next();
-});
 
 // Request logging middleware - log ALL incoming requests EARLY (including OPTIONS)
 // This must be before express.json to catch preflight requests
@@ -243,8 +222,10 @@ logger.info('Proxy Configuration:', {
   NODE_ENV: process.env.NODE_ENV
 });
 
-// Helper function to remove CORS headers from backend service responses and ensure gateway CORS headers are set
-// The gateway handles CORS, so we don't want backend services to send their own CORS headers
+// Helper function to remove CORS headers from backend service responses
+// The gateway handles CORS via the global `cors` middleware.
+// We strictly remove backend headers here to prevent "Duplicate Header" issues
+// or conflicting policies.
 const processCorsHeaders = (headers, userReq) => {
   const corsHeaders = [
     'access-control-allow-origin',
@@ -262,7 +243,7 @@ const processCorsHeaders = (headers, userReq) => {
       delete headers[key];
     }
   });
-  
+
   // Ensure gateway CORS headers are set (since proxy might overwrite them)
   const origin = userReq.headers.origin;
   
@@ -278,8 +259,8 @@ const processCorsHeaders = (headers, userReq) => {
     headers['Access-Control-Allow-Origin'] = origin;
     headers['Access-Control-Allow-Credentials'] = 'true';
     headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,PATCH,OPTIONS';
-    headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Accept,Accept-Language,Accept-Encoding';
-    headers['Access-Control-Expose-Headers'] = 'Content-Type,Authorization';
+    headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Expires,If-Modified-Since,Accept,Accept-Language,Accept-Encoding';
+    headers['Access-Control-Expose-Headers'] = 'Content-Type,Authorization,Expires,Pragma,Cache-Control';
     // Set Vary header for proper caching
     const existingVary = headers['Vary'] || '';
     headers['Vary'] = existingVary ? `${existingVary}, Origin` : 'Origin';
@@ -287,9 +268,8 @@ const processCorsHeaders = (headers, userReq) => {
     // In development, if no origin (same-origin or Postman), allow it
     // But we can't use '*' with credentials: true, so only set if no credentials needed
     headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,PATCH,OPTIONS';
-    headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Accept,Accept-Language,Accept-Encoding';
+    headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Expires,If-Modified-Since,Accept,Accept-Language,Accept-Encoding';
   }
-  // If origin exists but is not allowed in production, don't set CORS headers (browser will block)
   
   return headers;
 };

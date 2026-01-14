@@ -1,0 +1,44 @@
+* Host localhost:3000 was resolved.
+* IPv6: ::1
+* IPv4: 127.0.0.1
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying [::1]:3000...
+* Connected to localhost (::1) port 3000
+* using HTTP/1.x
+> GET /api/v1/user/verify-email?token=b6d1f09c4d6df6764b5810927b3b2055249cbd66ec30986aca8accbfd004a1c2 HTTP/1.1
+> Host: localhost:3000
+> User-Agent: curl/8.11.0
+> Accept: */*
+> Origin: http://localhost:5173
+> 
+* Request completely sent off
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0< HTTP/1.1 200 OK
+< content-security-policy: default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests
+< cross-origin-opener-policy: same-origin
+< cross-origin-resource-policy: cross-origin
+< origin-agent-cluster: ?1
+< referrer-policy: no-referrer
+< strict-transport-security: max-age=31536000; includeSubDomains
+< x-content-type-options: nosniff
+< x-dns-prefetch-control: off
+< x-download-options: noopen
+< x-frame-options: SAMEORIGIN
+< x-permitted-cross-domain-policies: none
+< x-xss-protection: 0
+< Vary: Origin
+< content-type: application/json; charset=utf-8
+< Content-Length: 902
+< etag: W/"386-o4feCY1BgG8RCNdYlrgQKFLUeIY"
+< set-cookie: connect.sid=s%3A_5PsV17yVDcFeoM6qsKD1UghpN6PXOXE.e8c%2B6PaYbYKvbzBFVxcFb%2FnidiHx5pFpYVCkOHJpk48; Path=/; HttpOnly
+< date: Wed, 14 Jan 2026 11:32:58 GMT
+< connection: close
+< Access-Control-Allow-Origin: http://localhost:5173
+< Access-Control-Allow-Credentials: true
+< Access-Control-Allow-Methods: GET,POST,PUT,DELETE,PATCH,OPTIONS
+< Access-Control-Allow-Headers: Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Accept,Accept-Language,Accept-Encoding
+< Access-Control-Expose-Headers: Content-Type,Authorization
+< 
+{ [902 bytes data]
+100   902  100   902    0     0    886      0  0:00:01  0:00:01 --:--:--   886{"success":true,"status":200,"message":"Email verified successfully","user":{"id":2,"uuid":"91aee89c-120c-4423-9f6d-b02ab9101ae1","name":"Rajan Kumar","email":"raorajan9576@gmail.com","password":"$2b$10$a1bZmw8Tc15EcWp45qZwFewnh6V5ihcevZnGlJDwMSZvJlPxPa/G.","oauthProvider":null,"oauthId":null,"bio":null,"avatarUrl":null,"domainPreferences":"7061344366","skills":null,"experience":"2","location":"Siwan","availability":"full-time","resumeUrl":null,"xp":0,"badges":[],"level":1,"githubUrl":null,"linkedinUrl":null,"stackoverflowUrl":null,"portfolioUrl":null,"portfolioScore":null,"isEmailVerified":false,"resetPasswordToken":"5faa348c419220a48582c5e2af2faff87cd41c093674bd476770c961ea288015","resetPasswordExpire":"2026-01-14T11:45:19.725Z","notificationPrefs":{},"role":"developer","roles":["developer"],"isDeleted":false,"createdAt":"2026-01-14T11:30:20.353Z","updatedAt":"2026-01-14T11:30:19.946Z"}}
+* shutting down connection #0

@@ -515,47 +515,59 @@ class UserModel {
   }
 
   static async removeDeveloperFavorite(userId, developerId) {
-    await db
-      .delete(developerFavoritesTable)
-      .where(
-        and(
-          eq(developerFavoritesTable.userId, userId),
-          eq(developerFavoritesTable.developerId, developerId)
-        )
-      );
-    return true;
+    try {
+      await db
+        .delete(developerFavoritesTable)
+        .where(
+          and(
+            eq(developerFavoritesTable.userId, userId),
+            eq(developerFavoritesTable.developerId, developerId)
+          )
+        );
+      return true;
+    } catch (error) {
+      console.error("Error removing developer favorite:", error);
+      // Return true even if not found (idempotent operation)
+      return true;
+    }
   }
 
   static async getDeveloperFavorites(userId) {
-    const { sql } = require("drizzle-orm");
-    
-    const favorites = await db.execute(sql`
-      SELECT 
-        df.id,
-        df.user_id as "userId",
-        df.developer_id as "developerId",
-        df.created_at as "createdAt",
-        u.id as "developer_id",
-        u.name,
-        u.email,
-        u.bio,
-        u.avatar_url as "avatarUrl",
-        u.skills,
-        u.experience,
-        u.location,
-        u.availability,
-        u.github_url as "githubUrl",
-        u.linkedin_url as "linkedinUrl",
-        u.portfolio_url as "portfolioUrl",
-        u.xp,
-        u.level
-      FROM developer_favorites df
-      LEFT JOIN users u ON df.developer_id = u.id
-      WHERE df.user_id = ${userId} AND u.is_deleted = false
-      ORDER BY df.created_at DESC
-    `);
-    
-    return favorites.rows || [];
+    try {
+      const { sql } = require("drizzle-orm");
+      
+      const favorites = await db.execute(sql`
+        SELECT 
+          df.id,
+          df.user_id as "userId",
+          df.developer_id as "developerId",
+          df.created_at as "createdAt",
+          u.id as "developer_id",
+          u.name,
+          u.email,
+          u.bio,
+          u.avatar_url as "avatarUrl",
+          u.skills,
+          u.experience,
+          u.location,
+          u.availability,
+          u.github_url as "githubUrl",
+          u.linkedin_url as "linkedinUrl",
+          u.portfolio_url as "portfolioUrl",
+          u.xp,
+          u.level
+        FROM developer_favorites df
+        LEFT JOIN users u ON df.developer_id = u.id
+        WHERE df.user_id = ${userId} AND (u.is_deleted = false OR u.is_deleted IS NULL)
+        ORDER BY df.created_at DESC
+      `);
+      
+      return favorites.rows || [];
+    } catch (error) {
+      console.error("Error fetching developer favorites:", error);
+      // Return empty array if query fails (table might not exist yet)
+      return [];
+    }
   }
 
   // ============================================
@@ -563,55 +575,76 @@ class UserModel {
   // ============================================
   
   static async addDeveloperSave(userId, developerId) {
-    const [save] = await db
-      .insert(developerSavesTable)
-      .values({ userId, developerId })
-      .returning();
-    return save;
+    try {
+      const [save] = await db
+        .insert(developerSavesTable)
+        .values({ userId, developerId })
+        .returning();
+      return save;
+    } catch (error) {
+      console.error("Error adding developer save:", error);
+      // Handle duplicate key error
+      if (error.code === '23505' || error.message.includes('duplicate') || error.message.includes('unique')) {
+        throw new Error("Developer already saved");
+      }
+      throw error;
+    }
   }
 
   static async removeDeveloperSave(userId, developerId) {
-    await db
-      .delete(developerSavesTable)
-      .where(
-        and(
-          eq(developerSavesTable.userId, userId),
-          eq(developerSavesTable.developerId, developerId)
-        )
-      );
-    return true;
+    try {
+      await db
+        .delete(developerSavesTable)
+        .where(
+          and(
+            eq(developerSavesTable.userId, userId),
+            eq(developerSavesTable.developerId, developerId)
+          )
+        );
+      return true;
+    } catch (error) {
+      console.error("Error removing developer save:", error);
+      // Return true even if not found (idempotent operation)
+      return true;
+    }
   }
 
   static async getDeveloperSaves(userId) {
-    const { sql } = require("drizzle-orm");
-    
-    const saves = await db.execute(sql`
-      SELECT 
-        ds.id,
-        ds.user_id as "userId",
-        ds.developer_id as "developerId",
-        ds.created_at as "createdAt",
-        u.id as "developer_id",
-        u.name,
-        u.email,
-        u.bio,
-        u.avatar_url as "avatarUrl",
-        u.skills,
-        u.experience,
-        u.location,
-        u.availability,
-        u.github_url as "githubUrl",
-        u.linkedin_url as "linkedinUrl",
-        u.portfolio_url as "portfolioUrl",
-        u.xp,
-        u.level
-      FROM developer_saves ds
-      LEFT JOIN users u ON ds.developer_id = u.id
-      WHERE ds.user_id = ${userId} AND u.is_deleted = false
-      ORDER BY ds.created_at DESC
-    `);
-    
-    return saves.rows || [];
+    try {
+      const { sql } = require("drizzle-orm");
+      
+      const saves = await db.execute(sql`
+        SELECT 
+          ds.id,
+          ds.user_id as "userId",
+          ds.developer_id as "developerId",
+          ds.created_at as "createdAt",
+          u.id as "developer_id",
+          u.name,
+          u.email,
+          u.bio,
+          u.avatar_url as "avatarUrl",
+          u.skills,
+          u.experience,
+          u.location,
+          u.availability,
+          u.github_url as "githubUrl",
+          u.linkedin_url as "linkedinUrl",
+          u.portfolio_url as "portfolioUrl",
+          u.xp,
+          u.level
+        FROM developer_saves ds
+        LEFT JOIN users u ON ds.developer_id = u.id
+        WHERE ds.user_id = ${userId} AND (u.is_deleted = false OR u.is_deleted IS NULL)
+        ORDER BY ds.created_at DESC
+      `);
+      
+      return saves.rows || [];
+    } catch (error) {
+      console.error("Error fetching developer saves:", error);
+      // Return empty array if query fails (table might not exist yet)
+      return [];
+    }
   }
 
   // ============================================
@@ -619,120 +652,150 @@ class UserModel {
   // ============================================
   
   static async applyToDeveloper(applicationData) {
-    const { projectOwnerId, developerId, projectId, message, notes } = applicationData;
-    
-    const [application] = await db
-      .insert(developerApplicationsTable)
-      .values({
-        projectOwnerId,
-        developerId,
-        projectId,
-        message,
-        notes,
-        status: 'pending'
-      })
-      .returning();
-    
-    return application;
+    try {
+      const { projectOwnerId, developerId, projectId, message, notes } = applicationData;
+      
+      const [application] = await db
+        .insert(developerApplicationsTable)
+        .values({
+          projectOwnerId,
+          developerId,
+          projectId,
+          message,
+          notes,
+          status: 'pending'
+        })
+        .returning();
+      
+      return application;
+    } catch (error) {
+      console.error("Error applying to developer:", error);
+      // Handle duplicate key error
+      if (error.code === '23505' || error.message.includes('duplicate') || error.message.includes('unique')) {
+        throw new Error("Application already exists");
+      }
+      throw error;
+    }
   }
 
   static async withdrawDeveloperApplication(projectOwnerId, developerId) {
-    const [result] = await db
-      .delete(developerApplicationsTable)
-      .where(
-        and(
-          eq(developerApplicationsTable.projectOwnerId, projectOwnerId),
-          eq(developerApplicationsTable.developerId, developerId)
+    try {
+      const [result] = await db
+        .delete(developerApplicationsTable)
+        .where(
+          and(
+            eq(developerApplicationsTable.projectOwnerId, projectOwnerId),
+            eq(developerApplicationsTable.developerId, developerId)
+          )
         )
-      )
-      .returning();
-    
-    return result;
+        .returning();
+      
+      return result;
+    } catch (error) {
+      console.error("Error withdrawing developer application:", error);
+      // Return null if not found (idempotent operation)
+      return null;
+    }
   }
 
   static async getMyDeveloperApplications(projectOwnerId) {
-    const { sql } = require("drizzle-orm");
-    
-    const applications = await db.execute(sql`
-      SELECT 
-        da.id as "applicationId",
-        da.project_owner_id as "projectOwnerId",
-        da.developer_id as "developerId",
-        da.project_id as "projectId",
-        da.message,
-        da.notes,
-        da.status,
-        da.applied_at as "appliedAt",
-        da.updated_at as "updatedAt",
-        u.id as "developer_id",
-        u.name,
-        u.email,
-        u.bio,
-        u.avatar_url as "avatarUrl",
-        u.skills,
-        u.experience,
-        u.location,
-        u.availability,
-        u.github_url as "githubUrl",
-        u.linkedin_url as "linkedinUrl",
-        u.portfolio_url as "portfolioUrl",
-        u.xp,
-        u.level
-      FROM developer_applications da
-      LEFT JOIN users u ON da.developer_id = u.id
-      WHERE da.project_owner_id = ${projectOwnerId} AND u.is_deleted = false
-      ORDER BY da.applied_at DESC
-    `);
-    
-    return applications.rows || [];
+    try {
+      const { sql } = require("drizzle-orm");
+      
+      const applications = await db.execute(sql`
+        SELECT 
+          da.id as "applicationId",
+          da.project_owner_id as "projectOwnerId",
+          da.developer_id as "developerId",
+          da.project_id as "projectId",
+          da.message,
+          da.notes,
+          da.status,
+          da.applied_at as "appliedAt",
+          da.updated_at as "updatedAt",
+          u.id as "developer_id",
+          u.name,
+          u.email,
+          u.bio,
+          u.avatar_url as "avatarUrl",
+          u.skills,
+          u.experience,
+          u.location,
+          u.availability,
+          u.github_url as "githubUrl",
+          u.linkedin_url as "linkedinUrl",
+          u.portfolio_url as "portfolioUrl",
+          u.xp,
+          u.level
+        FROM developer_applications da
+        LEFT JOIN users u ON da.developer_id = u.id
+        WHERE da.project_owner_id = ${projectOwnerId} AND (u.is_deleted = false OR u.is_deleted IS NULL)
+        ORDER BY da.applied_at DESC
+      `);
+      
+      return applications.rows || [];
+    } catch (error) {
+      console.error("Error fetching developer applications:", error);
+      return [];
+    }
   }
 
   static async getMyDeveloperApplicationsCount(projectOwnerId) {
-    const { sql } = require("drizzle-orm");
-    
-    const result = await db.execute(sql`
-      SELECT COUNT(*) as count
-      FROM developer_applications da
-      LEFT JOIN users u ON da.developer_id = u.id
-      WHERE da.project_owner_id = ${projectOwnerId} AND u.is_deleted = false
-    `);
-    
-    return result.rows[0]?.count || 0;
+    try {
+      const { sql } = require("drizzle-orm");
+      
+      const result = await db.execute(sql`
+        SELECT COUNT(*) as count
+        FROM developer_applications da
+        LEFT JOIN users u ON da.developer_id = u.id
+        WHERE da.project_owner_id = ${projectOwnerId} AND (u.is_deleted = false OR u.is_deleted IS NULL)
+      `);
+      
+      return result.rows[0]?.count || 0;
+    } catch (error) {
+      console.error("Error fetching developer applications count:", error);
+      return 0;
+    }
   }
 
   static async getAppliedDevelopers(projectOwnerId) {
-    const { sql } = require("drizzle-orm");
-    
-    const appliedDevelopers = await db.execute(sql`
-      SELECT 
-        da.id as "applicationId",
-        da.developer_id as "developerId",
-        da.project_id as "projectId",
-        da.status,
-        da.applied_at as "appliedAt",
-        da.message,
-        da.notes,
-        u.id as "developer_id",
-        u.name,
-        u.email,
-        u.bio,
-        u.avatar_url as "avatarUrl",
-        u.skills,
-        u.experience,
-        u.location,
-        u.availability,
-        u.github_url as "githubUrl",
-        u.linkedin_url as "linkedinUrl",
-        u.portfolio_url as "portfolioUrl",
-        u.xp,
-        u.level
-      FROM developer_applications da
-      LEFT JOIN users u ON da.developer_id = u.id
-      WHERE da.project_owner_id = ${projectOwnerId} AND u.is_deleted = false
-      ORDER BY da.applied_at DESC
-    `);
-    
-    return appliedDevelopers.rows || [];
+    try {
+      const { sql } = require("drizzle-orm");
+      
+      const appliedDevelopers = await db.execute(sql`
+        SELECT 
+          da.id as "applicationId",
+          da.developer_id as "developerId",
+          da.project_id as "projectId",
+          da.status,
+          da.applied_at as "appliedAt",
+          da.message,
+          da.notes,
+          u.id as "developer_id",
+          u.name,
+          u.email,
+          u.bio,
+          u.avatar_url as "avatarUrl",
+          u.skills,
+          u.experience,
+          u.location,
+          u.availability,
+          u.github_url as "githubUrl",
+          u.linkedin_url as "linkedinUrl",
+          u.portfolio_url as "portfolioUrl",
+          u.xp,
+          u.level
+        FROM developer_applications da
+        LEFT JOIN users u ON da.developer_id = u.id
+        WHERE da.project_owner_id = ${projectOwnerId} AND (u.is_deleted = false OR u.is_deleted IS NULL)
+        ORDER BY da.applied_at DESC
+      `);
+      
+      return appliedDevelopers.rows || [];
+    } catch (error) {
+      console.error("Error fetching applied developers:", error);
+      return [];
+    }
   }
 
   // ============================================

@@ -92,16 +92,28 @@ const createNotification = async (req, res) => {
     const userId = req.user?.userId || req.user?.id;
     const { type, title, message, category, priority, action, actionUrl, relatedEntityId, relatedEntityType, metadata } = req.body;
 
-    if (!type || !title || !message) {
-      return new ErrorHandler("Type, title, and message are required", 400).sendError(res);
+    if (!title || !message) {
+      return new ErrorHandler("Title and message are required", 400).sendError(res);
     }
 
     // If userId is not in body, use authenticated user
     const targetUserId = req.body.userId ? Number(req.body.userId) : Number(userId);
+    
+    // Default type if not provided - use a valid enum value
+    const validTypes = [
+      "Project Match", "Application Update", "Invitation", "Task Deadline",
+      "Chat Message", "Endorsement", "Review", "Career Opportunity",
+      "New Applicant", "Recommended Developer", "Project Update", "Billing Reminder",
+      "Project Milestone", "Team Invitation", "Budget Alert", "Flagged User",
+      "Dispute Report", "System Alert", "Billing Alert", "Moderation Task",
+      "Security Alert", "Platform Health", "User Verification", "Feature Request",
+      "Compliance Alert", "Other"
+    ];
+    const notificationType = type && validTypes.includes(type) ? type : 'Other';
 
     const notification = await NotificationsModel.createNotification({
       userId: targetUserId,
-      type,
+      type: notificationType,
       title,
       message,
       category,

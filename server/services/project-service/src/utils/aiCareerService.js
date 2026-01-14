@@ -191,7 +191,7 @@ class AICareerService {
   async getAdminCareerDashboard(timeframe = '6m', authToken = null) {
     try {
       const axios = require('axios');
-      const API_GATEWAY_URL = process.env.API_GATEWAY_URL || process.env.API_GATEWAY_BASE_URL || process.env.BACKEND_URL || 'http://localhost:3000';
+      const API_GATEWAY_URL = process.env.API_GATEWAY_URL || process.env.API_GATEWAY_BASE_URL || process.env.BACKEND_URL;
       
       // Get platform insights and skill trends from our own service
       const platformInsights = await this.getPlatformInsights();

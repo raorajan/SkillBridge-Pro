@@ -1,6 +1,8 @@
 import { io } from "socket.io-client";
 
-const CHAT_SERVICE_URL = import.meta.env.VITE_CHAT_SERVICE_URL || "http://localhost:3004";
+// Use gateway URL (port 3000) instead of direct chat service
+const GATEWAY_URL = import.meta.env.VITE_API_URL ;
+const CHAT_SERVICE_URL = GATEWAY_URL;
 
 // Get token from localStorage
 const getToken = () => {

@@ -17,20 +17,29 @@ const PORT = process.env.PORT || 3002;
 
 // CORS Configuration
 const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
-  ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  ? process.env.CORS_ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
   : [
-      'https://skillsbridge.raorajan.pro',
-      'https://raorajan.github.io',
-      'http://localhost:5173'
+      "https://skillsbridge.raorajan.pro",
+      "https://raorajan.github.io",
+      "http://localhost:5173",
+      "http://localhost:3000",
     ];
+
+// Be permissive in development to avoid CORS issues during local testing.
+const isDev = process.env.NODE_ENV !== "production";
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    if (isDev) {
+      // In development allow all origins (including undefined for tools like Postman)
+      return callback(null, true);
+    }
+
+    // Production: allow requests with no origin (like mobile apps or curl requests)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error("Not allowed by CORS"));
     }
   },
   credentials: true,

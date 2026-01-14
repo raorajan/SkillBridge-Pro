@@ -10,21 +10,21 @@
     "./middleware/*": "./middleware/*.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.90.0",
-    "axios": "^1.13.2",
-    "bcryptjs": "^3.0.3",
-    "cloudinary": "^2.8.0",
+    "@supabase/supabase-js": "^2.57.0",
+    "axios": "^1.10.0",
+    "bcryptjs": "^3.0.2",
+    "cloudinary": "^2.7.0",
     "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
-    "dotenv": "^17.2.3",
-    "drizzle-orm": "^0.45.1",
-    "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.3",
+    "dotenv": "^17.2.0",
+    "drizzle-orm": "^0.44.2",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
     "lodash": "^4.17.21",
     "moment": "^2.30.1",
-    "nodemailer": "^7.0.12",
+    "nodemailer": "^7.0.5",
     "pg": "^8.16.3",
-    "winston": "^3.19.0",
+    "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0"
   }
 }

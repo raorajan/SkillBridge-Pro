@@ -31,7 +31,7 @@ const OAuthButtons = ({ onOAuthClick, className = "" }) => {
 
   const handleOAuthClick = (provider) => {
     // Build OAuth URL with redirect parameter if present
-    let oauthUrl = `${import.meta.env.VITE_APP_API_URL}api/v1/auth/${provider}`;
+    let oauthUrl = `${import.meta.env.VITE_API_URL}api/v1/auth/${provider}`;
     
     if (redirectTo) {
       // Add redirect parameter to OAuth URL

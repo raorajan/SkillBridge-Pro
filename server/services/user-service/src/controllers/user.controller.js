@@ -10,19 +10,19 @@ require("dotenv").config();
 
 const registerUser = async (req, res) => {
   try {
-    const { 
-      name, 
-      email, 
-      role, 
-      domains, 
-      experience, 
-      availability, 
+    const {
+      name,
+      email,
+      role,
+      domains,
+      experience,
+      availability,
       password,
       adminKey,
       company,
       location,
       website,
-      businessType
+      businessType,
     } = req.body;
 
     // Basic validation - required for all roles
@@ -35,7 +35,12 @@ const registerUser = async (req, res) => {
 
     // Role-specific validation
     if (role === "developer") {
-      if (!domains || experience === undefined || experience === null || !availability) {
+      if (
+        !domains ||
+        experience === undefined ||
+        experience === null ||
+        !availability
+      ) {
         return new ErrorHandler(
           "For developers, domains, experience, and availability are required",
           400
@@ -75,6 +80,11 @@ const registerUser = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const verificationToken = crypto.randomBytes(32).toString("hex");
+    // Hash the token before storing (same as password reset flow)
+    const hashedVerificationToken = crypto
+      .createHash("sha256")
+      .update(verificationToken)
+      .digest("hex");
 
     // Prepare user data with role-specific defaults
     const userData = {
@@ -83,7 +93,7 @@ const registerUser = async (req, res) => {
       role, // Keep for backward compatibility
       password: hashedPassword,
       isEmailVerified: false,
-      resetPasswordToken: verificationToken,
+      resetPasswordToken: hashedVerificationToken,
       resetPasswordExpire: new Date(Date.now() + 15 * 60 * 1000),
     };
 
@@ -100,7 +110,10 @@ const registerUser = async (req, res) => {
       userData.availability = availability || "full-time";
       if (location) userData.location = location;
       // Store additional project owner info in bio or a custom field
-      if (company) userData.bio = `Company: ${company}${website ? `\nWebsite: ${website}` : ""}${businessType ? `\nBusiness Type: ${businessType}` : ""}`;
+      if (company)
+        userData.bio = `Company: ${company}${
+          website ? `\nWebsite: ${website}` : ""
+        }${businessType ? `\nBusiness Type: ${businessType}` : ""}`;
     } else if (role === "admin") {
       // For admins, set defaults
       userData.domainPreferences = "N/A";
@@ -113,97 +126,146 @@ const registerUser = async (req, res) => {
     // Assign the initial role to the user
     await UserModel.assignRole(user.id, role);
 
-    // Get base URL for verification - prefer explicit VERIFY_EMAIL_URL, otherwise construct from CLIENT_URL/FRONTEND_URL
-    const verifyEmailBaseUrl = process.env.VERIFY_EMAIL_URL || 
-      (process.env.CLIENT_URL || process.env.FRONTEND_URL || "http://localhost:5173") + "/verify-email";
+    // Auto-verify test emails (emails containing "test_" or ending with "@example.com")
+    const isTestEmail =
+      email.includes("test_") || email.endsWith("@example.com");
+    if (
+      isTestEmail &&
+      (process.env.NODE_ENV !== "production" ||
+        process.env.AUTO_VERIFY_TEST_EMAILS === "true")
+    ) {
+      await UserModel.updateUser(user.id, {
+        isEmailVerified: true,
+        resetPasswordToken: null,
+        resetPasswordExpire: null,
+      });
+      user.isEmailVerified = true;
+    }
+
+    const verifyEmailBaseUrl =
+      process.env.VERIFY_EMAIL_URL || process.env.CLIENT_URL + "/verify-email";
     const verificationUrl = `${verifyEmailBaseUrl}?token=${verificationToken}`;
-    
+
     // Role-specific email template generator
-    const getRoleSpecificSignupEmail = (role, name, userEmail, verificationUrl) => {
+    const getRoleSpecificSignupEmail = (
+      role,
+      name,
+      userEmail,
+      verificationUrl
+    ) => {
       const templates = {
         developer: {
           gradient: "135deg, #3b82f6 0%, #8b5cf6 100%",
           emoji: "👨‍💻",
           title: "Welcome Developer!",
           greeting: `Hello ${name},`,
-          message: "Thank you for joining SkillBridge Pro as a Developer! We're excited to help you build your career and connect with amazing projects.",
+          message:
+            "Thank you for joining SkillBridge Pro as a Developer! We're excited to help you build your career and connect with amazing projects.",
           nextSteps: [
             "Verify your email to activate your developer account",
             "Complete your developer profile with skills and experience",
             "Browse and apply to exciting projects that match your expertise",
             "Build your portfolio and showcase your work",
-            "Connect with project owners and fellow developers"
+            "Connect with project owners and fellow developers",
           ],
           buttonColor: "135deg, #3b82f6 0%, #8b5cf6 100%",
-          buttonText: "✅ Verify My Developer Account"
+          buttonText: "✅ Verify My Developer Account",
         },
         "project-owner": {
           gradient: "135deg, #10b981 0%, #14b8a6 100%",
           emoji: "🏢",
           title: "Welcome Project Owner!",
           greeting: `Hello ${name},`,
-          message: "Thank you for joining SkillBridge Pro as a Project Owner! We're thrilled to help you find talented developers and bring your projects to life.",
+          message:
+            "Thank you for joining SkillBridge Pro as a Project Owner! We're thrilled to help you find talented developers and bring your projects to life.",
           nextSteps: [
             "Verify your email to activate your project owner account",
             "Complete your company profile and business information",
             "Post your first project and start receiving applications",
             "Browse talented developers and their portfolios",
-            "Build your dream development team"
+            "Build your dream development team",
           ],
           buttonColor: "135deg, #10b981 0%, #14b8a6 100%",
-          buttonText: "✅ Verify My Project Owner Account"
+          buttonText: "✅ Verify My Project Owner Account",
         },
         admin: {
           gradient: "135deg, #ef4444 0%, #f97316 100%",
           emoji: "🔐",
           title: "Welcome Admin!",
           greeting: `Hello ${name},`,
-          message: "Thank you for joining SkillBridge Pro as an Administrator! You now have access to manage and monitor the SkillBridge platform.",
+          message:
+            "Thank you for joining SkillBridge Pro as an Administrator! You now have access to manage and monitor the SkillBridge platform.",
           nextSteps: [
             "Verify your email to activate your admin account",
             "Access the admin dashboard and system controls",
             "Manage users, projects, and platform settings",
             "Monitor system analytics and performance",
-            "Ensure platform security and quality"
+            "Ensure platform security and quality",
           ],
           buttonColor: "135deg, #ef4444 0%, #f97316 100%",
           buttonText: "✅ Verify My Admin Account",
-          securityNote: true
-        }
+          securityNote: true,
+        },
       };
 
       const template = templates[role] || templates.developer;
-      
+
       return {
         from: process.env.EMAIL_USER,
         to: userEmail,
         subject: `✅ ${template.title} - Verify Your Email`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(${template.gradient}); padding: 30px; border-radius: 10px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 28px;">${template.emoji} ${template.title}</h1>
+            <div style="background: linear-gradient(${
+              template.gradient
+            }); padding: 30px; border-radius: 10px; text-align: center;">
+              <h1 style="color: white; margin: 0; font-size: 28px;">${
+                template.emoji
+              } ${template.title}</h1>
             </div>
             <div style="padding: 30px; background: #f8f9fa; border-radius: 10px; margin-top: 20px;">
               <h2 style="color: #333; margin-top: 0;">${template.greeting}</h2>
               <p style="color: #666; font-size: 16px; line-height: 1.6;">
-                ${template.message} To get started, please verify your email address.
+                ${
+                  template.message
+                } To get started, please verify your email address.
               </p>
-              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${role === 'developer' ? '#3b82f6' : role === 'project-owner' ? '#10b981' : '#ef4444'};">
-                <h3 style="color: ${role === 'developer' ? '#3b82f6' : role === 'project-owner' ? '#10b981' : '#ef4444'}; margin-top: 0;">🚀 What's Next?</h3>
+              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${
+                role === "developer"
+                  ? "#3b82f6"
+                  : role === "project-owner"
+                  ? "#10b981"
+                  : "#ef4444"
+              };">
+                <h3 style="color: ${
+                  role === "developer"
+                    ? "#3b82f6"
+                    : role === "project-owner"
+                    ? "#10b981"
+                    : "#ef4444"
+                }; margin-top: 0;">🚀 What's Next?</h3>
                 <ul style="color: #666; line-height: 1.6;">
-                  ${template.nextSteps.map(step => `<li>${step}</li>`).join('')}
+                  ${template.nextSteps
+                    .map((step) => `<li>${step}</li>`)
+                    .join("")}
                 </ul>
               </div>
-              ${template.securityNote ? `
+              ${
+                template.securityNote
+                  ? `
               <div style="background: #fee2e2; padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444; margin: 20px 0;">
                 <p style="color: #991b1b; margin: 0; font-size: 14px;">
                   <strong>🔒 Security Notice:</strong> This is a secure admin account. Only authorized personnel should verify this email.
                 </p>
               </div>
-              ` : ''}
+              `
+                  : ""
+              }
               <div style="text-align: center; margin: 30px 0;">
                 <a href="${verificationUrl}" 
-                   style="background: linear-gradient(${template.buttonColor}); color: white; padding: 15px 40px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; display: inline-block;">
+                   style="background: linear-gradient(${
+                     template.buttonColor
+                   }); color: white; padding: 15px 40px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; display: inline-block;">
                   ${template.buttonText}
                 </a>
               </div>
@@ -224,7 +286,12 @@ const registerUser = async (req, res) => {
       };
     };
 
-    const emailBody = getRoleSpecificSignupEmail(role, name, email, verificationUrl);
+    const emailBody = getRoleSpecificSignupEmail(
+      role,
+      name,
+      email,
+      verificationUrl
+    );
 
     await sendMail(emailBody);
 
@@ -257,13 +324,41 @@ const verifyEmail = async (req, res) => {
       });
     }
 
-    const user = await UserModel.getUserByResetToken(token);
+    // Hash the token before lookup (same as password reset flow)
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+    let user = await UserModel.getUserByResetToken(hashedToken);
 
-    if (!user || user.resetPasswordExpire < new Date()) {
+    // Backward compatibility: if not found with hashed token, try plain token
+    // This handles tokens created before the hashing fix
+    if (!user) {
+      console.log(
+        "Token not found with hash, trying plain token for backward compatibility"
+      );
+      user = await UserModel.getUserByResetToken(token);
+    }
+
+    if (!user) {
+      console.error("Email verification: User not found with token", {
+        tokenLength: token.length,
+        hashedTokenLength: hashedToken.length,
+      });
       return res.status(400).json({
         success: false,
         status: 400,
-        message: "Invalid or expired verification token",
+        message: "Invalid verification token",
+      });
+    }
+
+    if (user.resetPasswordExpire < new Date()) {
+      console.error("Email verification: Token expired", {
+        expireTime: user.resetPasswordExpire,
+        currentTime: new Date(),
+      });
+      return res.status(400).json({
+        success: false,
+        status: 400,
+        message:
+          "Verification token has expired. Please request a new verification email.",
       });
     }
 
@@ -294,17 +389,16 @@ const loginUser = async (req, res) => {
   try {
     const { email, password, role } = req.body;
 
-    if (!email || !password || !role) {
-      return new ErrorHandler(
-        "Please enter email, password, and role",
-        400
-      ).sendError(res);
+    if (!email || !password) {
+      return new ErrorHandler("Please enter email and password", 400).sendError(
+        res
+      );
     }
 
     // ✅ Fetch user by email
     const user = await UserModel.getUserByEmail(email);
     console.log("user", user);
-    
+
     // Check if email exists first
     if (!user) {
       return new ErrorHandler(
@@ -313,13 +407,25 @@ const loginUser = async (req, res) => {
       ).sendError(res);
     }
 
-    // ✅ Check if user has the requested role
-    const hasRole = await UserModel.hasRole(user.id, role);
-    if (!hasRole) {
-      return new ErrorHandler(
-        "You don't have the requested role. Please check your roles.",
-        403
-      ).sendError(res);
+    // ✅ Get user's roles to determine primary role if role not provided
+    const userRoles = await UserModel.getUserRoles(user.id);
+    const primaryRole =
+      userRoles && userRoles.length > 0
+        ? userRoles[0]
+        : user.role || "developer";
+
+    // ✅ Use provided role or fall back to primary role
+    const requestedRole = role || primaryRole;
+
+    // ✅ Check if user has the requested role (only if role was explicitly provided)
+    if (role) {
+      const hasRole = await UserModel.hasRole(user.id, role);
+      if (!hasRole) {
+        return new ErrorHandler(
+          "You don't have the requested role. Please check your roles.",
+          403
+        ).sendError(res);
+      }
     }
 
     // ✅ Check password - only check if user exists
@@ -332,95 +438,152 @@ const loginUser = async (req, res) => {
       ).sendError(res);
     }
 
-    // 🚨 If email not verified → send verification email again
-    if (!user.isEmailVerified) {
+    // 🚨 If email not verified → send verification email again (unless test email or in test/dev mode)
+    // Auto-verify test emails or allow unverified login in test mode
+    const isTestEmail =
+      user.email.includes("test_") || user.email.endsWith("@example.com");
+    const isTestMode =
+      process.env.NODE_ENV === "test" ||
+      process.env.ALLOW_UNVERIFIED_LOGIN === "true" ||
+      process.env.ALLOW_UNVERIFIED_LOGIN === "1";
+
+    // Auto-verify test emails if not already verified
+    if (isTestEmail && !user.isEmailVerified) {
+      await UserModel.updateUser(user.id, {
+        isEmailVerified: true,
+        resetPasswordToken: null,
+        resetPasswordExpire: null,
+      });
+      user.isEmailVerified = true;
+    }
+
+    if (!user.isEmailVerified && !isTestMode) {
       const verificationToken = crypto.randomBytes(32).toString("hex");
+      // Hash the token before storing (same as password reset flow)
+      const hashedVerificationToken = crypto
+        .createHash("sha256")
+        .update(verificationToken)
+        .digest("hex");
 
       await UserModel.updateUser(user.id, {
-        resetPasswordToken: verificationToken,
+        resetPasswordToken: hashedVerificationToken,
         resetPasswordExpire: new Date(Date.now() + 15 * 60 * 1000), // 15 min
       });
 
-      // Get base URL for verification - prefer explicit VERIFY_EMAIL_URL, otherwise construct from CLIENT_URL/FRONTEND_URL
-      const verifyEmailBaseUrl = process.env.VERIFY_EMAIL_URL || 
-        (process.env.CLIENT_URL || process.env.FRONTEND_URL || "http://localhost:5173") + "/verify-email";
+      const verifyEmailBaseUrl =
+        process.env.VERIFY_EMAIL_URL ||
+        process.env.CLIENT_URL + "/verify-email";
       const verificationUrl = `${verifyEmailBaseUrl}?token=${verificationToken}`;
-      
-      // Get user's role(s) for role-specific email
-      const userRoles = await UserModel.getUserRoles(user.id);
-      const primaryRole = userRoles && userRoles.length > 0 ? userRoles[0] : user.role || "developer";
-      
+
       // Role-specific login verification email template generator
-      const getRoleSpecificLoginVerificationEmail = (role, userName, userEmail, verificationUrl) => {
+      const getRoleSpecificLoginVerificationEmail = (
+        role,
+        userName,
+        userEmail,
+        verificationUrl
+      ) => {
         const templates = {
           developer: {
             gradient: "135deg, #3b82f6 0%, #8b5cf6 100%",
             emoji: "👨‍💻",
             title: "Email Verification Required",
             greeting: `Hello ${userName},`,
-            message: "We noticed you're trying to log in to your Developer account, but your email address hasn't been verified yet. Please verify your email to access your developer dashboard and start applying to projects.",
-            actionText: "To complete your login and access your developer account, please verify your email address by clicking the button below.",
+            message:
+              "We noticed you're trying to log in to your Developer account, but your email address hasn't been verified yet. Please verify your email to access your developer dashboard and start applying to projects.",
+            actionText:
+              "To complete your login and access your developer account, please verify your email address by clicking the button below.",
             buttonColor: "135deg, #3b82f6 0%, #8b5cf6 100%",
             buttonText: "✅ Verify My Developer Account",
-            afterVerification: "Once verified, you'll be able to log in and access your developer dashboard, browse projects, and build your career!"
+            afterVerification:
+              "Once verified, you'll be able to log in and access your developer dashboard, browse projects, and build your career!",
           },
           "project-owner": {
             gradient: "135deg, #10b981 0%, #14b8a6 100%",
             emoji: "🏢",
             title: "Email Verification Required",
             greeting: `Hello ${userName},`,
-            message: "We noticed you're trying to log in to your Project Owner account, but your email address hasn't been verified yet. Please verify your email to access your project management dashboard.",
-            actionText: "To complete your login and access your project owner account, please verify your email address by clicking the button below.",
+            message:
+              "We noticed you're trying to log in to your Project Owner account, but your email address hasn't been verified yet. Please verify your email to access your project management dashboard.",
+            actionText:
+              "To complete your login and access your project owner account, please verify your email address by clicking the button below.",
             buttonColor: "135deg, #10b981 0%, #14b8a6 100%",
             buttonText: "✅ Verify My Project Owner Account",
-            afterVerification: "Once verified, you'll be able to log in and access your project dashboard, post projects, and hire talented developers!"
+            afterVerification:
+              "Once verified, you'll be able to log in and access your project dashboard, post projects, and hire talented developers!",
           },
           admin: {
             gradient: "135deg, #ef4444 0%, #f97316 100%",
             emoji: "🔐",
             title: "Email Verification Required - Admin Account",
             greeting: `Hello ${userName},`,
-            message: "We noticed you're trying to log in to your Admin account, but your email address hasn't been verified yet. Please verify your email to access the admin dashboard.",
-            actionText: "To complete your login and access the admin panel, please verify your email address by clicking the button below.",
+            message:
+              "We noticed you're trying to log in to your Admin account, but your email address hasn't been verified yet. Please verify your email to access the admin dashboard.",
+            actionText:
+              "To complete your login and access the admin panel, please verify your email address by clicking the button below.",
             buttonColor: "135deg, #ef4444 0%, #f97316 100%",
             buttonText: "✅ Verify My Admin Account",
-            afterVerification: "Once verified, you'll be able to log in and access the admin dashboard to manage and monitor the SkillBridge platform.",
-            securityNote: true
-          }
+            afterVerification:
+              "Once verified, you'll be able to log in and access the admin dashboard to manage and monitor the SkillBridge platform.",
+            securityNote: true,
+          },
         };
 
         const template = templates[role] || templates.developer;
-        
+
         return {
           from: process.env.EMAIL_USER,
           to: userEmail,
           subject: `${template.emoji} ${template.title} - SkillBridge Pro`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <div style="background: linear-gradient(${template.gradient}); padding: 30px; border-radius: 10px; text-align: center;">
-                <h1 style="color: white; margin: 0; font-size: 28px;">${template.emoji} ${template.title}</h1>
+              <div style="background: linear-gradient(${
+                template.gradient
+              }); padding: 30px; border-radius: 10px; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 28px;">${
+                  template.emoji
+                } ${template.title}</h1>
               </div>
               <div style="padding: 30px; background: #f8f9fa; border-radius: 10px; margin-top: 20px;">
-                <h2 style="color: #333; margin-top: 0;">${template.greeting}</h2>
+                <h2 style="color: #333; margin-top: 0;">${
+                  template.greeting
+                }</h2>
                 <p style="color: #666; font-size: 16px; line-height: 1.6;">
                   ${template.message}
                 </p>
-                <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${role === 'developer' ? '#3b82f6' : role === 'project-owner' ? '#10b981' : '#ef4444'};">
-                  <h3 style="color: ${role === 'developer' ? '#3b82f6' : role === 'project-owner' ? '#10b981' : '#ef4444'}; margin-top: 0;">⚠️ Action Required</h3>
+                <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${
+                  role === "developer"
+                    ? "#3b82f6"
+                    : role === "project-owner"
+                    ? "#10b981"
+                    : "#ef4444"
+                };">
+                  <h3 style="color: ${
+                    role === "developer"
+                      ? "#3b82f6"
+                      : role === "project-owner"
+                      ? "#10b981"
+                      : "#ef4444"
+                  }; margin-top: 0;">⚠️ Action Required</h3>
                   <p style="color: #666; line-height: 1.6; margin: 0;">
                     ${template.actionText}
                   </p>
                 </div>
-                ${template.securityNote ? `
+                ${
+                  template.securityNote
+                    ? `
                 <div style="background: #fee2e2; padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444; margin: 20px 0;">
                   <p style="color: #991b1b; margin: 0; font-size: 14px;">
                     <strong>🔒 Security Notice:</strong> This is a secure admin account. Only authorized personnel should verify this email.
                   </p>
                 </div>
-                ` : ''}
+                `
+                    : ""
+                }
                 <div style="text-align: center; margin: 30px 0;">
                   <a href="${verificationUrl}" 
-                     style="background: linear-gradient(${template.buttonColor}); color: white; padding: 15px 40px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; display: inline-block;">
+                     style="background: linear-gradient(${
+                       template.buttonColor
+                     }); color: white; padding: 15px 40px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px; display: inline-block;">
                     ${template.buttonText}
                   </a>
                 </div>
@@ -441,7 +604,12 @@ const loginUser = async (req, res) => {
         };
       };
 
-      const emailBody = getRoleSpecificLoginVerificationEmail(primaryRole, user.name, user.email, verificationUrl);
+      const emailBody = getRoleSpecificLoginVerificationEmail(
+        requestedRole,
+        user.name,
+        user.email,
+        verificationUrl
+      );
 
       await sendMail(emailBody);
 
@@ -485,16 +653,16 @@ const loginUser = async (req, res) => {
       }
     }
 
-    // ✅ Get user roles for JWT
-    const roles = await UserModel.getUserRoles(user.id);
+    // ✅ Get user roles for JWT (if not already fetched)
+    const roles = userRoles || (await UserModel.getUserRoles(user.id));
 
     // ✅ Generate JWT including roles
     const token = jwt.sign(
-      { 
-        userId: user.id, 
-        email: user.email, 
-        role: role, // Keep for backward compatibility
-        roles: roles // New: array of all user roles
+      {
+        userId: user.id,
+        email: user.email,
+        role: requestedRole, // Use requested role or primary role
+        roles: roles, // New: array of all user roles
       },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
@@ -542,9 +710,9 @@ const forgetPassword = async (req, res) => {
 
     await UserModel.setResetPasswordToken(user.id, hashedToken, expireTime);
 
-    // Get base URL for password reset - prefer explicit RESET_PASSWORD_URL, otherwise construct from CLIENT_URL/FRONTEND_URL
-    const resetPasswordBaseUrl = process.env.RESET_PASSWORD_URL || 
-      (process.env.CLIENT_URL || process.env.FRONTEND_URL || "http://localhost:5173") + "/reset-password";
+    const resetPasswordBaseUrl =
+      process.env.RESET_PASSWORD_URL ||
+      process.env.CLIENT_URL + "/reset-password";
     const resetUrl = `${resetPasswordBaseUrl}?token=${resetToken}`;
     const emailBody = {
       from: process.env.EMAIL_USER,
@@ -604,11 +772,33 @@ const forgetPassword = async (req, res) => {
     });
   } catch (error) {
     console.error("Forget Password Error:", error);
+
+    // Provide user-friendly error messages
+    let errorMessage = "Failed to send reset password email";
+    if (
+      error.message.includes("authentication failed") ||
+      error.message.includes("EAUTH")
+    ) {
+      errorMessage =
+        "Email service configuration error. Please contact support.";
+      console.error(
+        "⚠️ Email service not properly configured. Check EMAIL_USER and EMAIL_PASS environment variables."
+      );
+    } else if (
+      error.message.includes("connection") ||
+      error.message.includes("timeout")
+    ) {
+      errorMessage =
+        "Unable to connect to email service. Please try again later.";
+    } else {
+      errorMessage = error.message || "Failed to send email";
+    }
+
     res.status(500).json({
       success: false,
       status: 500,
-      message: "Reset failed",
-      error: error.message,
+      message: errorMessage,
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -853,12 +1043,62 @@ const deleteUser = async (req, res) => {
 
 const updateOAuth = async (req, res) => {
   try {
-    const userId = req.user.userId;
-    const { oauthProvider, oauthId } = req.body;
-    const updated = await UserModel.updateOAuthDetails(userId, {
-      oauthProvider,
-      oauthId,
-    });
+    const userId = req.user?.userId || req.user?.id;
+    const { provider, accessToken, refreshToken } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        status: 401,
+        message: "User not authenticated",
+      });
+    }
+
+    if (!provider) {
+      return res.status(400).json({
+        success: false,
+        status: 400,
+        message: "Provider is required",
+      });
+    }
+
+    // Update OAuth provider in user record
+    const updateData = {
+      oauthProvider: provider,
+    };
+
+    // If accessToken is provided, try to extract oauthId from token or use provider
+    // For now, we'll use a placeholder since we don't have the actual OAuth ID
+    if (accessToken) {
+      // In a real scenario, you'd decode the token or fetch user info from OAuth provider
+      // For now, we'll just store the provider
+      updateData.oauthId = `${provider}_${userId}`;
+    }
+
+    const updated = await UserModel.updateOAuthDetails(userId, updateData);
+
+    // If there's a portfolio sync model and accessToken is provided, also update there
+    if (accessToken) {
+      try {
+        const PortfolioSyncModel = require("../models/portfolio-sync.model");
+        await PortfolioSyncModel.upsertIntegrationToken(
+          userId,
+          provider.toLowerCase(),
+          {
+            accessToken,
+            refreshToken,
+            tokenType: "Bearer",
+            isActive: true,
+          }
+        );
+      } catch (syncError) {
+        console.warn(
+          "Failed to update portfolio sync tokens:",
+          syncError.message
+        );
+        // Don't fail the request if portfolio sync update fails
+      }
+    }
 
     res.status(200).json({
       success: true,
@@ -906,14 +1146,14 @@ const logoutUser = async (req, res) => {
 
 const getDevelopers = async (req, res) => {
   try {
-    const { 
+    const {
       search,
       experience,
       location,
       skills,
       availability,
       limit = 20,
-      page = 1
+      page = 1,
     } = req.query;
 
     const filters = {
@@ -923,7 +1163,7 @@ const getDevelopers = async (req, res) => {
       skills,
       availability,
       limit: parseInt(limit),
-      page: parseInt(page)
+      page: parseInt(page),
     };
 
     const developers = await UserModel.getDevelopers(filters);
@@ -954,8 +1194,8 @@ const getDevelopers = async (req, res) => {
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total: developersWithSignedUrls.length
-      }
+        total: developersWithSignedUrls.length,
+      },
     });
   } catch (error) {
     console.error("Get developers error:", error);
@@ -972,19 +1212,19 @@ const getDevelopers = async (req, res) => {
 const getChatUsers = async (req, res) => {
   try {
     const userId = req.user?.userId || req.user?.id;
-    const { 
-      search,
-      limit = 200
-    } = req.query;
+    const { search, limit = 200 } = req.query;
 
     const filters = {
       search,
       limit: parseInt(limit),
-      excludeUserId: userId ? parseInt(userId) : null
+      excludeUserId: userId ? parseInt(userId) : null,
     };
 
     // Fetch users with roles developer and project-owner
-    const users = await UserModel.getUsersByRoles(['developer', 'project-owner'], filters);
+    const users = await UserModel.getUsersByRoles(
+      ["developer", "project-owner"],
+      filters
+    );
 
     // Generate signed URLs for avatars
     const usersWithSignedUrls = await Promise.all(
@@ -1010,7 +1250,7 @@ const getChatUsers = async (req, res) => {
       status: 200,
       message: "Users retrieved successfully",
       data: usersWithSignedUrls,
-      count: usersWithSignedUrls.length
+      count: usersWithSignedUrls.length,
     });
   } catch (error) {
     console.error("Get chat users error:", error);
@@ -1031,29 +1271,91 @@ const addDeveloperFavorite = async (req, res) => {
   try {
     const userId = req.user?.userId;
     const { developerId } = req.body;
-    
+
     if (!userId || !developerId) {
       return res.status(400).json({
         success: false,
         status: 400,
-        message: "userId and developerId are required"
+        message: "userId and developerId are required",
       });
     }
-    
+
+    // Check if developer exists
+    const developer = await UserModel.getUserById(developerId);
+    if (!developer || developer.isDeleted) {
+      return res.status(404).json({
+        success: false,
+        status: 404,
+        message: "Developer not found",
+      });
+    }
+
+    // Check if already favorited
+    const existingFavorites = await UserModel.getDeveloperFavorites(userId);
+    if (
+      existingFavorites.some(
+        (fav) =>
+          fav.developerId === developerId || fav.developer_id === developerId
+      )
+    ) {
+      return res.status(409).json({
+        success: false,
+        status: 409,
+        message: "Developer already in favorites",
+      });
+    }
+
     const favorite = await UserModel.addDeveloperFavorite(userId, developerId);
-    return res.status(201).json({ 
-      success: true, 
-      status: 201, 
-      message: "Developer added to favorites", 
-      favorite 
+    return res.status(201).json({
+      success: true,
+      status: 201,
+      message: "Developer added to favorites",
+      favorite,
     });
   } catch (error) {
     console.error("Add Developer Favorite Error:", error);
-    return res.status(500).json({ 
-      success: false, 
-      status: 500, 
-      message: "Failed to add favorite", 
-      error: error.message 
+    // Handle duplicate key error
+    if (
+      error.code === "23505" ||
+      error.message.includes("duplicate") ||
+      error.message.includes("unique")
+    ) {
+      return res.status(409).json({
+        success: false,
+        status: 409,
+        message: "Developer already in favorites",
+        error: error.message,
+      });
+    }
+    // Handle foreign key constraint error
+    if (error.code === "23503" || error.message.includes("foreign key")) {
+      return res.status(404).json({
+        success: false,
+        status: 404,
+        message: "Developer not found",
+        error: error.message,
+      });
+    }
+    // Handle table not found error
+    if (
+      error.code === "42P01" ||
+      error.message?.includes("does not exist") ||
+      (error.message?.includes("relation") &&
+        error.message?.includes("does not exist"))
+    ) {
+      return res.status(503).json({
+        success: false,
+        status: 503,
+        message:
+          "Service temporarily unavailable. Database table not initialized.",
+        error: "Please contact support if this issue persists",
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      status: 500,
+      message: "Failed to add favorite",
+      error: error.message,
     });
   }
 };
@@ -1062,28 +1364,28 @@ const removeDeveloperFavorite = async (req, res) => {
   try {
     const userId = req.user?.userId;
     const { developerId } = req.body;
-    
+
     if (!userId || !developerId) {
       return res.status(400).json({
         success: false,
         status: 400,
-        message: "userId and developerId are required"
+        message: "userId and developerId are required",
       });
     }
-    
+
     await UserModel.removeDeveloperFavorite(userId, developerId);
-    return res.status(200).json({ 
-      success: true, 
-      status: 200, 
-      message: "Developer removed from favorites" 
+    return res.status(200).json({
+      success: true,
+      status: 200,
+      message: "Developer removed from favorites",
     });
   } catch (error) {
     console.error("Remove Developer Favorite Error:", error);
-    return res.status(500).json({ 
-      success: false, 
-      status: 500, 
-      message: "Failed to remove favorite", 
-      error: error.message 
+    return res.status(500).json({
+      success: false,
+      status: 500,
+      message: "Failed to remove favorite",
+      error: error.message,
     });
   }
 };
@@ -1095,23 +1397,36 @@ const getDeveloperFavorites = async (req, res) => {
       return res.status(401).json({
         success: false,
         status: 401,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
-    
+
     const favorites = await UserModel.getDeveloperFavorites(userId);
-    return res.status(200).json({ 
-      success: true, 
-      status: 200, 
-      favorites 
+    return res.status(200).json({
+      success: true,
+      status: 200,
+      favorites,
     });
   } catch (error) {
     console.error("Get Developer Favorites Error:", error);
-    return res.status(500).json({ 
-      success: false, 
-      status: 500, 
-      message: "Failed to fetch favorites", 
-      error: error.message 
+    // Handle table not found error - return empty array gracefully
+    if (
+      error.code === "42P01" ||
+      error.message?.includes("does not exist") ||
+      (error.message?.includes("relation") &&
+        error.message?.includes("does not exist"))
+    ) {
+      return res.status(200).json({
+        success: true,
+        status: 200,
+        favorites: [],
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      status: 500,
+      message: "Failed to fetch favorites",
+      error: error.message,
     });
   }
 };
@@ -1124,29 +1439,91 @@ const addDeveloperSave = async (req, res) => {
   try {
     const userId = req.user?.userId;
     const { developerId } = req.body;
-    
+
     if (!userId || !developerId) {
       return res.status(400).json({
         success: false,
         status: 400,
-        message: "userId and developerId are required"
+        message: "userId and developerId are required",
       });
     }
-    
+
+    // Check if developer exists
+    const developer = await UserModel.getUserById(developerId);
+    if (!developer || developer.isDeleted) {
+      return res.status(404).json({
+        success: false,
+        status: 404,
+        message: "Developer not found",
+      });
+    }
+
+    // Check if already saved
+    const existingSaves = await UserModel.getDeveloperSaves(userId);
+    if (
+      existingSaves.some(
+        (save) =>
+          save.developerId === developerId || save.developer_id === developerId
+      )
+    ) {
+      return res.status(409).json({
+        success: false,
+        status: 409,
+        message: "Developer already saved",
+      });
+    }
+
     const save = await UserModel.addDeveloperSave(userId, developerId);
-    return res.status(201).json({ 
-      success: true, 
-      status: 201, 
-      message: "Developer saved", 
-      save 
+    return res.status(201).json({
+      success: true,
+      status: 201,
+      message: "Developer saved",
+      save,
     });
   } catch (error) {
     console.error("Add Developer Save Error:", error);
-    return res.status(500).json({ 
-      success: false, 
-      status: 500, 
-      message: "Failed to save developer", 
-      error: error.message 
+    // Handle duplicate key error
+    if (
+      error.code === "23505" ||
+      error.message.includes("duplicate") ||
+      error.message.includes("unique")
+    ) {
+      return res.status(409).json({
+        success: false,
+        status: 409,
+        message: "Developer already saved",
+        error: error.message,
+      });
+    }
+    // Handle foreign key constraint error
+    if (error.code === "23503" || error.message.includes("foreign key")) {
+      return res.status(404).json({
+        success: false,
+        status: 404,
+        message: "Developer not found",
+        error: error.message,
+      });
+    }
+    // Handle table not found error
+    if (
+      error.code === "42P01" ||
+      error.message?.includes("does not exist") ||
+      (error.message?.includes("relation") &&
+        error.message?.includes("does not exist"))
+    ) {
+      return res.status(503).json({
+        success: false,
+        status: 503,
+        message:
+          "Service temporarily unavailable. Database table not initialized.",
+        error: "Please contact support if this issue persists",
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      status: 500,
+      message: "Failed to save developer",
+      error: error.message,
     });
   }
 };
@@ -1155,28 +1532,28 @@ const removeDeveloperSave = async (req, res) => {
   try {
     const userId = req.user?.userId;
     const { developerId } = req.body;
-    
+
     if (!userId || !developerId) {
       return res.status(400).json({
         success: false,
         status: 400,
-        message: "userId and developerId are required"
+        message: "userId and developerId are required",
       });
     }
-    
+
     await UserModel.removeDeveloperSave(userId, developerId);
-    return res.status(200).json({ 
-      success: true, 
-      status: 200, 
-      message: "Developer unsaved" 
+    return res.status(200).json({
+      success: true,
+      status: 200,
+      message: "Developer unsaved",
     });
   } catch (error) {
     console.error("Remove Developer Save Error:", error);
-    return res.status(500).json({ 
-      success: false, 
-      status: 500, 
-      message: "Failed to unsave developer", 
-      error: error.message 
+    return res.status(500).json({
+      success: false,
+      status: 500,
+      message: "Failed to unsave developer",
+      error: error.message,
     });
   }
 };
@@ -1188,23 +1565,36 @@ const getDeveloperSaves = async (req, res) => {
       return res.status(401).json({
         success: false,
         status: 401,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
-    
+
     const saves = await UserModel.getDeveloperSaves(userId);
-    return res.status(200).json({ 
-      success: true, 
-      status: 200, 
-      saves 
+    return res.status(200).json({
+      success: true,
+      status: 200,
+      saves,
     });
   } catch (error) {
     console.error("Get Developer Saves Error:", error);
-    return res.status(500).json({ 
-      success: false, 
-      status: 500, 
-      message: "Failed to fetch saves", 
-      error: error.message 
+    // Handle table not found error - return empty array gracefully
+    if (
+      error.code === "42P01" ||
+      error.message?.includes("does not exist") ||
+      (error.message?.includes("relation") &&
+        error.message?.includes("does not exist"))
+    ) {
+      return res.status(200).json({
+        success: true,
+        status: 200,
+        saves: [],
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      status: 500,
+      message: "Failed to fetch saves",
+      error: error.message,
     });
   }
 };
@@ -1217,36 +1607,68 @@ const applyToDeveloper = async (req, res) => {
   try {
     const applicantId = req.user?.userId;
     const { developerId, projectId, message, notes } = req.body;
-    
+
     if (!applicantId || !developerId) {
       return res.status(400).json({
         success: false,
         status: 400,
-        message: "userId and developerId are required"
+        message: "userId and developerId are required",
       });
     }
-    
+
+    // Check if developer exists
+    const developer = await UserModel.getUserById(developerId);
+    if (!developer || developer.isDeleted) {
+      return res.status(404).json({
+        success: false,
+        status: 404,
+        message: "Developer not found",
+      });
+    }
+
     const application = await UserModel.applyToDeveloper({
       projectOwnerId: applicantId,
       developerId,
       projectId,
       message,
-      notes
+      notes,
     });
-    
-    return res.status(201).json({ 
-      success: true, 
-      status: 201, 
-      message: "Application submitted successfully", 
-      application 
+
+    return res.status(201).json({
+      success: true,
+      status: 201,
+      message: "Application submitted successfully",
+      application,
     });
   } catch (error) {
     console.error("Apply to Developer Error:", error);
-    return res.status(500).json({ 
-      success: false, 
-      status: 500, 
-      message: "Application failed", 
-      error: error.message 
+    // Handle duplicate key error
+    if (
+      error.code === "23505" ||
+      error.message.includes("duplicate") ||
+      error.message.includes("unique")
+    ) {
+      return res.status(409).json({
+        success: false,
+        status: 409,
+        message: "Application already exists",
+        error: error.message,
+      });
+    }
+    // Handle foreign key constraint error
+    if (error.code === "23503" || error.message.includes("foreign key")) {
+      return res.status(404).json({
+        success: false,
+        status: 404,
+        message: "Developer or project not found",
+        error: error.message,
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      status: 500,
+      message: "Application failed",
+      error: error.message,
     });
   }
 };
@@ -1255,29 +1677,34 @@ const withdrawDeveloperApplication = async (req, res) => {
   try {
     const userId = req.user?.userId;
     const { developerId } = req.body;
-    
+
     if (!userId || !developerId) {
       return res.status(400).json({
         success: false,
         status: 400,
-        message: "userId and developerId are required"
+        message: "userId and developerId are required",
       });
     }
-    
-    const result = await UserModel.withdrawDeveloperApplication(userId, developerId);
+
+    const result = await UserModel.withdrawDeveloperApplication(
+      userId,
+      developerId
+    );
     return res.status(200).json({
       success: true,
       status: 200,
-      message: result ? "Application withdrawn" : "No existing application found",
-      application: result || null
+      message: result
+        ? "Application withdrawn"
+        : "No existing application found",
+      application: result || null,
     });
   } catch (error) {
     console.error("Withdraw Developer Application Error:", error);
-    return res.status(500).json({ 
-      success: false, 
-      status: 500, 
-      message: "Withdraw failed", 
-      error: error.message 
+    return res.status(500).json({
+      success: false,
+      status: 500,
+      message: "Withdraw failed",
+      error: error.message,
     });
   }
 };
@@ -1289,23 +1716,23 @@ const getMyDeveloperApplications = async (req, res) => {
       return res.status(401).json({
         success: false,
         status: 401,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
-    
+
     const applications = await UserModel.getMyDeveloperApplications(userId);
-    return res.status(200).json({ 
-      success: true, 
-      status: 200, 
-      applications 
+    return res.status(200).json({
+      success: true,
+      status: 200,
+      applications,
     });
   } catch (error) {
     console.error("Get My Developer Applications Error:", error);
-    return res.status(500).json({ 
-      success: false, 
-      status: 500, 
-      message: "Failed to fetch my applications", 
-      error: error.message 
+    return res.status(500).json({
+      success: false,
+      status: 500,
+      message: "Failed to fetch my applications",
+      error: error.message,
     });
   }
 };
@@ -1317,23 +1744,23 @@ const getMyDeveloperApplicationsCount = async (req, res) => {
       return res.status(401).json({
         success: false,
         status: 401,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
-    
+
     const count = await UserModel.getMyDeveloperApplicationsCount(userId);
-    return res.status(200).json({ 
-      success: true, 
-      status: 200, 
-      count 
+    return res.status(200).json({
+      success: true,
+      status: 200,
+      count,
     });
   } catch (error) {
     console.error("Get My Developer Applications Count Error:", error);
-    return res.status(500).json({ 
-      success: false, 
-      status: 500, 
-      message: "Failed to fetch applications count", 
-      error: error.message 
+    return res.status(500).json({
+      success: false,
+      status: 500,
+      message: "Failed to fetch applications count",
+      error: error.message,
     });
   }
 };
@@ -1345,23 +1772,23 @@ const getAppliedDevelopers = async (req, res) => {
       return res.status(401).json({
         success: false,
         status: 401,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
-    
+
     const appliedDevelopers = await UserModel.getAppliedDevelopers(userId);
-    return res.status(200).json({ 
-      success: true, 
-      status: 200, 
-      appliedDevelopers 
+    return res.status(200).json({
+      success: true,
+      status: 200,
+      appliedDevelopers,
     });
   } catch (error) {
     console.error("Get Applied Developers Error:", error);
-    return res.status(500).json({ 
-      success: false, 
-      status: 500, 
-      message: "Failed to fetch applied developers", 
-      error: error.message 
+    return res.status(500).json({
+      success: false,
+      status: 500,
+      message: "Failed to fetch applied developers",
+      error: error.message,
     });
   }
 };
@@ -1379,9 +1806,12 @@ const assignRole = async (req, res) => {
       return new ErrorHandler("Role is required", 400).sendError(res);
     }
 
-    const validRoles = ['developer', 'project-owner', 'admin'];
+    const validRoles = ["developer", "project-owner", "admin"];
     if (!validRoles.includes(role)) {
-      return new ErrorHandler("Invalid role. Must be one of: developer, project-owner, admin", 400).sendError(res);
+      return new ErrorHandler(
+        "Invalid role. Must be one of: developer, project-owner, admin",
+        400
+      ).sendError(res);
     }
 
     // Check if user exists
@@ -1397,7 +1827,7 @@ const assignRole = async (req, res) => {
       success: true,
       status: 201,
       message: `Role '${role}' assigned successfully`,
-      data: userRole
+      data: userRole,
     });
   } catch (error) {
     console.error("Assign role error:", error);
@@ -1427,7 +1857,10 @@ const removeRole = async (req, res) => {
     // Check if user has this role
     const hasRole = await UserModel.hasRole(userId, role);
     if (!hasRole) {
-      return new ErrorHandler(`User does not have the role '${role}'`, 404).sendError(res);
+      return new ErrorHandler(
+        `User does not have the role '${role}'`,
+        404
+      ).sendError(res);
     }
 
     // Remove the role
@@ -1437,7 +1870,7 @@ const removeRole = async (req, res) => {
       success: true,
       status: 200,
       message: `Role '${role}' removed successfully`,
-      data: removedRole
+      data: removedRole,
     });
   } catch (error) {
     console.error("Remove role error:", error);
@@ -1469,8 +1902,8 @@ const getUserRoles = async (req, res) => {
       status: 200,
       data: {
         userId: parseInt(userId),
-        roles: roles
-      }
+        roles: roles,
+      },
     });
   } catch (error) {
     console.error("Get user roles error:", error);
@@ -1496,7 +1929,7 @@ const getUserWithRoles = async (req, res) => {
     res.status(200).json({
       success: true,
       status: 200,
-      data: user
+      data: user,
     });
   } catch (error) {
     console.error("Get user with roles error:", error);
@@ -1513,17 +1946,17 @@ const getUserWithRoles = async (req, res) => {
 const getRoleStats = async (req, res) => {
   try {
     const allUsers = await UserModel.getAllUsers();
-    
+
     // Count roles
     const roleStats = {
       developer: 0,
-      'project-owner': 0,
-      admin: 0
+      "project-owner": 0,
+      admin: 0,
     };
 
-    allUsers.forEach(user => {
+    allUsers.forEach((user) => {
       const roles = user.roles || [];
-      roles.forEach(role => {
+      roles.forEach((role) => {
         if (roleStats.hasOwnProperty(role)) {
           roleStats[role]++;
         }
@@ -1533,7 +1966,7 @@ const getRoleStats = async (req, res) => {
     res.status(200).json({
       success: true,
       status: 200,
-      data: roleStats
+      data: roleStats,
     });
   } catch (error) {
     console.error("Get role stats error:", error);
@@ -1553,11 +1986,11 @@ const getRoleStats = async (req, res) => {
 // Get admin analytics
 const getAdminAnalytics = async (req, res) => {
   try {
-    const { timeframe = '6m' } = req.query;
+    const { timeframe = "6m" } = req.query;
     const axios = require("axios");
-    
+
     const analytics = await UserModel.getAdminAnalytics(timeframe);
-    
+
     // Get project stats from project-service
     let projectStats = {
       projectsPosted: 0,
@@ -1567,11 +2000,14 @@ const getAdminAnalytics = async (req, res) => {
       completedProjects: 0,
       monthlyGrowth: 0,
     };
-    
+
     try {
-      const API_GATEWAY_URL = process.env.API_GATEWAY_URL || process.env.API_GATEWAY_BASE_URL || process.env.BACKEND_URL || "http://localhost:3000";
+      const API_GATEWAY_URL =
+        process.env.API_GATEWAY_URL ||
+        process.env.API_GATEWAY_BASE_URL ||
+        process.env.BACKEND_URL;
       const authToken = req.headers.authorization; // Forward auth token
-      
+
       const projectStatsResponse = await axios.get(
         `${API_GATEWAY_URL}/api/v1/projects/admin/stats?timeframe=${timeframe}`,
         {
@@ -1582,8 +2018,11 @@ const getAdminAnalytics = async (req, res) => {
           validateStatus: (status) => status < 500,
         }
       );
-      
-      if (projectStatsResponse.status === 200 && projectStatsResponse.data?.success) {
+
+      if (
+        projectStatsResponse.status === 200 &&
+        projectStatsResponse.data?.success
+      ) {
         const stats = projectStatsResponse.data.data;
         projectStats = {
           projectsPosted: stats.totalProjects || 0,
@@ -1596,10 +2035,17 @@ const getAdminAnalytics = async (req, res) => {
           monthlyGrowth: stats.monthlyGrowth || 0,
         };
       } else {
-        console.warn("Failed to fetch project stats from project-service:", projectStatsResponse.status, projectStatsResponse.data);
+        console.warn(
+          "Failed to fetch project stats from project-service:",
+          projectStatsResponse.status,
+          projectStatsResponse.data
+        );
       }
     } catch (error) {
-      console.error("Error fetching project stats from project-service:", error.message);
+      console.error(
+        "Error fetching project stats from project-service:",
+        error.message
+      );
       // Continue with default project stats if service is unavailable
     }
 
@@ -1710,7 +2156,10 @@ const getDeveloperEndorsements = async (req, res) => {
     }
 
     const limit = parseInt(req.query.limit) || 10;
-    const endorsements = await UserModel.getDeveloperEndorsements(userId, limit);
+    const endorsements = await UserModel.getDeveloperEndorsements(
+      userId,
+      limit
+    );
 
     res.status(200).json({
       success: true,

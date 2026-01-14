@@ -354,7 +354,13 @@ const deleteMessage = async (req, res) => {
     if (!userId) return new ErrorHandler("User ID is required", 400).sendError(res);
     if (!messageId) return new ErrorHandler("Message ID is required", 400).sendError(res);
 
-    const message = await MessagesModel.deleteMessage(Number(messageId), Number(userId));
+    // Validate messageId is a valid number
+    const parsedMessageId = Number(messageId);
+    if (isNaN(parsedMessageId) || parsedMessageId <= 0) {
+      return new ErrorHandler("Invalid message ID", 400).sendError(res);
+    }
+
+    const message = await MessagesModel.deleteMessage(parsedMessageId, Number(userId));
 
     if (!message) {
       return new ErrorHandler("Message not found or you don't have permission", 404).sendError(res);
@@ -637,11 +643,21 @@ const flagConversation = async (req, res) => {
     if (!userId) return new ErrorHandler("User ID is required", 400).sendError(res);
     if (!conversationId) return new ErrorHandler("Conversation ID is required", 400).sendError(res);
 
+    // Validate conversationId is a valid number
+    const parsedConversationId = Number(conversationId);
+    if (isNaN(parsedConversationId) || parsedConversationId <= 0) {
+      return new ErrorHandler("Invalid conversation ID", 400).sendError(res);
+    }
+
     const conversation = await ConversationsModel.flagConversation(
-      Number(conversationId),
+      parsedConversationId,
       Number(userId),
-      reason
+      reason || null
     );
+
+    if (!conversation) {
+      return new ErrorHandler("Conversation not found", 404).sendError(res);
+    }
 
     return res.status(200).json({
       success: true,
@@ -669,7 +685,17 @@ const unflagConversation = async (req, res) => {
     if (!userId) return new ErrorHandler("User ID is required", 400).sendError(res);
     if (!conversationId) return new ErrorHandler("Conversation ID is required", 400).sendError(res);
 
-    const conversation = await ConversationsModel.unflagConversation(Number(conversationId));
+    // Validate conversationId is a valid number
+    const parsedConversationId = Number(conversationId);
+    if (isNaN(parsedConversationId) || parsedConversationId <= 0) {
+      return new ErrorHandler("Invalid conversation ID", 400).sendError(res);
+    }
+
+    const conversation = await ConversationsModel.unflagConversation(parsedConversationId);
+
+    if (!conversation) {
+      return new ErrorHandler("Conversation not found", 404).sendError(res);
+    }
 
     return res.status(200).json({
       success: true,

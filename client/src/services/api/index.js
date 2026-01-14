@@ -40,7 +40,7 @@ const fetchApiWrapper = (
   Authorization,
 ) => {
   // Ensure proper URL construction
-  let baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:3000";
+  let baseUrl = import.meta.env.VITE_API_URL;
   // Remove trailing slash from baseUrl
   baseUrl = baseUrl.replace(/\/+$/, "");
   // Ensure uri starts with a slash
@@ -48,6 +48,9 @@ const fetchApiWrapper = (
   const url = `${baseUrl}${normalizedUri}`;
   
   const config = getHeaderConfig(requestType, options, Authorization);
+  // Add withCredentials for CORS with credentials
+  config.withCredentials = true;
+  
   if (requestType === "GET") {
     return axios({ url, method: "get", ...config });
   } else if (requestType === "POST") {
@@ -63,7 +66,7 @@ const fetchApiWrapper = (
   } else if (requestType === "MULTIPART_PUT") {
     return axios({ url, method: "put", data, ...config });
   } else if (requestType === "JSON") {
-    return axios.get(url);
+    return axios.get(url, { ...config });
   }
 };
 

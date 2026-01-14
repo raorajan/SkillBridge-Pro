@@ -618,50 +618,84 @@ class ProjectsModel {
   // Get projects by owner
   static async getProjectsByOwner(ownerId) {
     try {
+      // Validate ownerId
+      if (!ownerId || isNaN(Number(ownerId))) {
+        console.error("Invalid ownerId:", ownerId);
+        return [];
+      }
+
       const projects = await db
         .select()
         .from(projectsTable)
         .where(and(
-          eq(projectsTable.ownerId, ownerId),
+          eq(projectsTable.ownerId, Number(ownerId)),
           eq(projectsTable.isDeleted, false)
         ))
         .orderBy(desc(projectsTable.createdAt));
 
-      // Get tags and skills for each project
+      // Ensure projects is an array
+      if (!Array.isArray(projects)) {
+        console.error("getProjectsByOwner returned non-array:", typeof projects);
+        return [];
+      }
+
+      // Get tags and skills for each project (with error handling)
       const projectsWithMetadata = await Promise.all(
         projects.map(async (project) => {
-          const [projectSkills, projectTags] = await Promise.all([
-            // Join with skills table to get skill names
-            db.select({ 
-              name: skillsTable.name,
-              category: skillsTable.category 
-            })
-            .from(projectSkillsTable)
-            .innerJoin(skillsTable, eq(projectSkillsTable.skillId, skillsTable.id))
-            .where(eq(projectSkillsTable.projectId, project.id)),
+          let projectSkills = [];
+          let projectTags = [];
+          
+          try {
+            const [skillsResult, tagsResult] = await Promise.allSettled([
+              // Join with skills table to get skill names
+              db.select({ 
+                name: skillsTable.name,
+                category: skillsTable.category 
+              })
+              .from(projectSkillsTable)
+              .innerJoin(skillsTable, eq(projectSkillsTable.skillId, skillsTable.id))
+              .where(eq(projectSkillsTable.projectId, project.id)),
+              
+              // Join with tags table to get tag names
+              db.select({ 
+                name: tagsTable.name,
+                category: tagsTable.category 
+              })
+              .from(projectTagsTable)
+              .innerJoin(tagsTable, eq(projectTagsTable.tagId, tagsTable.id))
+              .where(eq(projectTagsTable.projectId, project.id))
+            ]);
             
-            // Join with tags table to get tag names
-            db.select({ 
-              name: tagsTable.name,
-              category: tagsTable.category 
-            })
-            .from(projectTagsTable)
-            .innerJoin(tagsTable, eq(projectTagsTable.tagId, tagsTable.id))
-            .where(eq(projectTagsTable.projectId, project.id))
-          ]);
+            if (skillsResult.status === 'fulfilled') {
+              projectSkills = skillsResult.value || [];
+            } else {
+              console.error(`Error fetching skills for project ${project.id}:`, skillsResult.reason);
+            }
+            
+            if (tagsResult.status === 'fulfilled') {
+              projectTags = tagsResult.value || [];
+            } else {
+              console.error(`Error fetching tags for project ${project.id}:`, tagsResult.reason);
+            }
+          } catch (error) {
+            console.error(`Error fetching metadata for project ${project.id}:`, error.message);
+            // Continue with empty skills/tags
+          }
 
           return {
             ...project,
-            skills: projectSkills.map(s => s.name),
-            tags: projectTags.map(t => t.name)
+            skills: Array.isArray(projectSkills) ? projectSkills.map(s => s.name) : [],
+            tags: Array.isArray(projectTags) ? projectTags.map(t => t.name) : []
           };
         })
       );
 
       return projectsWithMetadata;
     } catch (error) {
-      console.error('Error fetching projects by owner:', error);
-      throw error;
+      console.error('Error fetching projects by owner:', error.message || error);
+      // Return empty array instead of throwing error
+      // This allows the controller to handle gracefully
+      return [];
     }
   }
 

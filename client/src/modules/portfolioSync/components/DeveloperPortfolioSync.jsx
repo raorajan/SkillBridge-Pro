@@ -968,7 +968,7 @@ const DeveloperPortfolioSync = ({ user }) => {
                       onClick={() => {
                         // Get token and redirect to GitHub OAuth
                         const token = getToken();
-                        let apiUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:3000";
+                        let apiUrl = import.meta.env.VITE_API_URL;
                         // Ensure trailing slash
                         if (!apiUrl.endsWith('/')) {
                           apiUrl += '/';

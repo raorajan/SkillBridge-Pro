@@ -3,7 +3,7 @@ const { createProxyMiddleware: proxy } = require("http-proxy-middleware");
 const { Buffer } = require("buffer");
 
 const SERVICE_URLS = {
-  USER: "http://localhost:3001",
+  USER: process.env.API_USER_URL,
 };
 
 const proxyConfig = {

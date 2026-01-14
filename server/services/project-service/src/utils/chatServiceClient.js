@@ -9,7 +9,7 @@ const axios = require("axios");
  */
 
 // Get API Gateway URL from environment or use default
-const API_GATEWAY_URL = process.env.API_GATEWAY_URL || process.env.API_GATEWAY_BASE_URL || process.env.BACKEND_URL || "http://localhost:3000";
+const API_GATEWAY_URL = process.env.API_GATEWAY_URL || process.env.API_GATEWAY_BASE_URL || process.env.BACKEND_URL ;
 const CHAT_SERVICE_BASE_URL = `${API_GATEWAY_URL}/api/v1/chat`;
 
 /**

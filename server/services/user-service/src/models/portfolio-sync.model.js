@@ -377,35 +377,59 @@ class PortfolioSyncModel {
    * This is used by project owners to view developers' portfolio sync data
    */
   static async getDeveloperPortfolioSyncData(developerId) {
-    // Get all integration tokens for the developer
-    const tokens = await this.getAllIntegrationTokens(developerId);
+    try {
+      // Get all integration tokens for the developer
+      const tokens = await this.getAllIntegrationTokens(developerId).catch(() => []);
 
-    // Get last sync history for each platform
-    const syncHistory = await this.getSyncHistory(developerId, 50);
-    
-    // Get overall skill scores
-    const overallSkills = await this.getOverallSkillScore(developerId);
+      // Get last sync history for each platform
+      const syncHistory = await this.getSyncHistory(developerId, 50).catch(() => []);
+      
+      // Get overall skill scores
+      const overallSkills = await this.getOverallSkillScore(developerId).catch(() => ({
+        overallScore: 0,
+        skills: []
+      }));
 
-    // Get sync data counts
-    const githubData = await this.getSyncData(developerId, "github");
-    const stackoverflowData = await this.getSyncData(developerId, "stackoverflow");
+      // Get sync data counts
+      const githubData = await this.getSyncData(developerId, "github").catch(() => []);
+      const stackoverflowData = await this.getSyncData(developerId, "stackoverflow").catch(() => []);
 
-    return {
-      integrations: {
-        github: {
-          connected: tokens.some((t) => t.platform === "github"),
-          lastSync: syncHistory.find((h) => h.platform === "github")?.completedAt || null,
-          dataCount: githubData.length,
+      return {
+        integrations: {
+          github: {
+            connected: tokens.some((t) => t.platform === "github"),
+            lastSync: syncHistory.find((h) => h.platform === "github")?.completedAt || null,
+            dataCount: githubData.length,
+          },
+          stackoverflow: {
+            connected: tokens.some((t) => t.platform === "stackoverflow"),
+            lastSync: syncHistory.find((h) => h.platform === "stackoverflow")?.completedAt || null,
+            dataCount: stackoverflowData.length,
+          },
         },
-        stackoverflow: {
-          connected: tokens.some((t) => t.platform === "stackoverflow"),
-          lastSync: syncHistory.find((h) => h.platform === "stackoverflow")?.completedAt || null,
-          dataCount: stackoverflowData.length,
+        overallScore: overallSkills.overallScore || 0,
+        skills: overallSkills.skills || [],
+      };
+    } catch (error) {
+      console.error("Error in getDeveloperPortfolioSyncData:", error);
+      // Return empty data structure instead of throwing
+      return {
+        integrations: {
+          github: {
+            connected: false,
+            lastSync: null,
+            dataCount: 0,
+          },
+          stackoverflow: {
+            connected: false,
+            lastSync: null,
+            dataCount: 0,
+          },
         },
-      },
-      overallScore: overallSkills.overallScore,
-      skills: overallSkills.skills,
-    };
+        overallScore: 0,
+        skills: [],
+      };
+    }
   }
 }
 

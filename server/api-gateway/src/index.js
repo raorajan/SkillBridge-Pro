@@ -259,8 +259,8 @@ const processCorsHeaders = (headers, userReq) => {
     headers['Access-Control-Allow-Origin'] = origin;
     headers['Access-Control-Allow-Credentials'] = 'true';
     headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,PATCH,OPTIONS';
-    headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Expires,If-Modified-Since,Accept,Accept-Language,Accept-Encoding';
-    headers['Access-Control-Expose-Headers'] = 'Content-Type,Authorization,Expires,Pragma,Cache-Control';
+    headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Accept,Accept-Language,Accept-Encoding';
+    headers['Access-Control-Expose-Headers'] = 'Content-Type,Authorization';
     // Set Vary header for proper caching
     const existingVary = headers['Vary'] || '';
     headers['Vary'] = existingVary ? `${existingVary}, Origin` : 'Origin';
@@ -268,14 +268,13 @@ const processCorsHeaders = (headers, userReq) => {
     // In development, if no origin (same-origin or Postman), allow it
     // But we can't use '*' with credentials: true, so only set if no credentials needed
     headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,PATCH,OPTIONS';
-    headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Expires,If-Modified-Since,Accept,Accept-Language,Accept-Encoding';
+    headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Accept,Accept-Language,Accept-Encoding';
   }
   
   return headers;
 };
 
-// Helper to send proxy errors with proper CORS headers so the browser
-// doesn't treat them as generic "CORS errors" and hide the real problem.
+
 const sendProxyErrorWithCors = (err, req, res, statusCode = 500, message = "Internal server error") => {
   const origin = req.headers.origin;
 

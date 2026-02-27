@@ -9,7 +9,9 @@ require("winston-daily-rotate-file");
 const logDirectory = path.resolve(__dirname, '../../log');
 
 // Ensure log directory exists
-fs.existsSync(logDirectory) || fs.mkdirSync(logDirectory);
+if (!fs.existsSync(logDirectory)) {
+    fs.mkdirSync(logDirectory, { recursive: true });
+}
 
 // Create a rotating write stream for access logs (handled by morgan)
 const accessLogStream = rfs.createStream('access.log', {
